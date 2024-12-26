@@ -35,7 +35,8 @@ export default defineConfig(({ mode }) => {
               'react-router-dom',
               'react-beautiful-dnd',
               'react-hotkeys-hook',
-              'canvas-confetti'
+              'canvas-confetti',
+              'react-colorful'
             ]
           }
         }
@@ -53,7 +54,8 @@ export default defineConfig(({ mode }) => {
         'firebase/database',
         'react-hotkeys-hook',
         'react-beautiful-dnd',
-        'canvas-confetti'
+        'canvas-confetti',
+        'react-colorful'
       ]
     }
   };
