@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+        'canvas': path.resolve(__dirname, './node_modules/canvas')
       }
     },
     define: {
@@ -28,7 +29,6 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 5000,
       assetsDir: 'assets',
       rollupOptions: {
-        external: ['canvas'],
         output: {
           manualChunks: {
             vendor: [
@@ -39,23 +39,22 @@ export default defineConfig(({ mode }) => {
               'firebase/auth',
               'firebase/firestore',
               'firebase/storage',
-              'firebase/database',
+              'firebase/database'
+            ],
+            ui: [
               'react-colorful',
-              'react-color',
               'react-beautiful-dnd',
-              'react-big-calendar',
               'framer-motion',
-              'react-pdf',
               'react-hot-toast',
               'react-icons',
               'react-helmet-async',
-              'react-hotkeys-hook',
-              'roughjs',
-              'canvas-confetti',
+              'react-hotkeys-hook'
+            ],
+            utils: [
               'date-fns',
-              'emoji-picker-react',
               'lodash',
-              'react-syntax-highlighter'
+              'roughjs',
+              'canvas-confetti'
             ]
           },
           assetFileNames: (assetInfo) => {
@@ -83,23 +82,20 @@ export default defineConfig(({ mode }) => {
         'firebase/storage',
         'firebase/database',
         'react-colorful',
-        'react-color',
         'react-beautiful-dnd',
-        'react-big-calendar',
         'framer-motion',
-        'react-pdf',
         'react-hot-toast',
         'react-icons',
         'react-helmet-async',
         'react-hotkeys-hook',
-        'roughjs',
-        'canvas-confetti',
         'date-fns',
-        'emoji-picker-react',
         'lodash',
-        'react-syntax-highlighter'
+        'roughjs',
+        'canvas-confetti'
       ],
       exclude: ['canvas']
-    }
+    },
+    publicDir: 'public',
+    base: '/'
   };
 });
