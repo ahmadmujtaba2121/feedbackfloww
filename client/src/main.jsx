@@ -19,10 +19,6 @@ window.addEventListener('error', (event) => {
   console.error('Global error:', event.error);
 });
 
-// Initialize theme
-const savedTheme = localStorage.getItem('theme') || 'default';
-document.documentElement.setAttribute('data-theme', savedTheme);
-
 // Define default theme colors
 const defaultThemes = {
   default: {
@@ -159,24 +155,49 @@ const defaultThemes = {
   }
 };
 
-// Apply theme colors from localStorage if they exist, otherwise use defaults
-const savedCustomColors = localStorage.getItem('customColors');
-try {
-  const colors = savedCustomColors ? JSON.parse(savedCustomColors) : {};
-  const currentThemeColors = colors[savedTheme] || defaultThemes[savedTheme];
-  if (currentThemeColors) {
-    Object.entries(currentThemeColors).forEach(([key, value]) => {
+// Function to apply theme colors
+const applyThemeColors = (themeName) => {
+  try {
+    const savedCustomColors = localStorage.getItem('customColors');
+    const colors = savedCustomColors ? JSON.parse(savedCustomColors) : {};
+    const currentThemeColors = colors[themeName] || defaultThemes[themeName];
+
+    if (currentThemeColors) {
+      Object.entries(currentThemeColors).forEach(([key, value]) => {
+        document.documentElement.style.setProperty(`--${key}`, value);
+      });
+    }
+  } catch (error) {
+    console.error('Error applying theme colors:', error);
+    // Fallback to default theme colors
+    const defaultColors = defaultThemes[themeName] || defaultThemes.default;
+    Object.entries(defaultColors).forEach(([key, value]) => {
       document.documentElement.style.setProperty(`--${key}`, value);
     });
   }
-} catch (error) {
-  console.error('Error applying theme colors:', error);
-  // Fallback to default theme colors
-  const defaultColors = defaultThemes[savedTheme] || defaultThemes.default;
-  Object.entries(defaultColors).forEach(([key, value]) => {
-    document.documentElement.style.setProperty(`--${key}`, value);
+};
+
+// Initialize theme
+const savedTheme = localStorage.getItem('theme') || 'default';
+document.documentElement.setAttribute('data-theme', savedTheme);
+applyThemeColors(savedTheme);
+
+// Listen for theme changes
+const observer = new MutationObserver((mutations) => {
+  mutations.forEach((mutation) => {
+    if (mutation.type === 'attributes' && mutation.attributeName === 'data-theme') {
+      const newTheme = document.documentElement.getAttribute('data-theme');
+      if (newTheme) {
+        applyThemeColors(newTheme);
+      }
+    }
   });
-}
+});
+
+observer.observe(document.documentElement, {
+  attributes: true,
+  attributeFilter: ['data-theme']
+});
 
 // Remove any stale service worker
 if ('serviceWorker' in navigator) {
