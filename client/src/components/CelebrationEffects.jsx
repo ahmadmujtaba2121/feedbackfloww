@@ -1,7 +1,12 @@
 import React, { useEffect } from 'react';
-import confetti from 'canvas-confetti';
 
-const celebrateApproval = () => {
+const loadConfetti = async () => {
+  const confetti = (await import('canvas-confetti')).default;
+  return confetti;
+};
+
+const celebrateApproval = async () => {
+  const confetti = await loadConfetti();
   // Shoot confetti from the center
   confetti({
     particleCount: 100,

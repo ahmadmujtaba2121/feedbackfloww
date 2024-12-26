@@ -15,8 +15,26 @@ export default defineConfig({
     sourcemap: true,
     chunkSizeWarningLimit: 3000,
     rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'index.html')
+      external: ['canvas-confetti'],
+      output: {
+        globals: {
+          'canvas-confetti': 'confetti'
+        },
+        manualChunks: {
+          vendor: [
+            'react',
+            'react-dom',
+            'react-router-dom',
+            'react-hotkeys-hook'
+          ],
+          firebase: [
+            'firebase/app',
+            'firebase/auth',
+            'firebase/firestore',
+            'firebase/storage',
+            'firebase/database'
+          ]
+        }
       }
     }
   },
