@@ -60,6 +60,71 @@ code {
   --muted-foreground: #94A3B8;
 }
 
+[data-theme="emerald"] {
+  --background: #0f1f1a;
+  --foreground: #132d25;
+  --primary: #10b981;
+  --secondary: #1e4037;
+  --accent: #059669;
+  --muted: #1e4037;
+  --border: #1e4037;
+  --primary-foreground: #0f1f1a;
+  --secondary-foreground: #e2f5ef;
+  --muted-foreground: #34d399;
+}
+
+[data-theme="purple"] {
+  --background: #1E1B2E;
+  --foreground: #2A2640;
+  --primary: #B197FC;
+  --secondary: #433D66;
+  --accent: #9775FA;
+  --muted: #433D66;
+  --border: #433D66;
+  --primary-foreground: #1E1B2E;
+  --secondary-foreground: #F3F0FF;
+  --muted-foreground: #D0BFFF;
+}
+
+[data-theme="ocean"] {
+  --background: #042f49;
+  --foreground: #0c4a6e;
+  --primary: #38bdf8;
+  --secondary: #164e63;
+  --accent: #0ea5e9;
+  --muted: #164e63;
+  --border: #164e63;
+  --primary-foreground: #042f49;
+  --secondary-foreground: #e0f2fe;
+  --muted-foreground: #7dd3fc;
+}
+
+[data-theme="sunset"] {
+  --background: #18181B;
+  --foreground: #27272A;
+  --primary: #F97316;
+  --secondary: #3F3F46;
+  --accent: #F97316;
+  --muted: #3F3F46;
+  --border: #3F3F46;
+  --primary-foreground: #18181B;
+  --secondary-foreground: #FAFAFA;
+  --muted-foreground: #A1A1AA;
+}
+
+[data-theme="sunset-warm"] {
+  --background: #1f1410;
+  --foreground: #4b2c1b;
+  --primary: #f59e0b;
+  --secondary: #713f12;
+  --accent: #fb923c;
+  --muted: #713f12;
+  --border: #713f12;
+  --primary-foreground: #1f1410;
+  --secondary-foreground: #fef3c7;
+  --muted-foreground: #fcd34d;
+}
+
 [data-theme="monochrome"] {
   --background: #18181b;
   --foreground: #27272a;
@@ -84,6 +149,19 @@ code {
   --primary-foreground: #f8fafc;
   --secondary-foreground: #0f172a;
   --muted-foreground: #64748b;
+}
+
+[data-theme="classic"] {
+  --background: #ffffff;
+  --foreground: #f8f9fa;
+  --primary: #000000;
+  --secondary: #e9ecef;
+  --accent: #343a40;
+  --muted: #dee2e6;
+  --border: #dee2e6;
+  --primary-foreground: #ffffff;
+  --secondary-foreground: #212529;
+  --muted-foreground: #6c757d;
 }
 
 /* Apply theme variables to Tailwind classes */

@@ -23,20 +23,135 @@ window.addEventListener('error', (event) => {
 const savedTheme = localStorage.getItem('theme') || 'default';
 document.documentElement.setAttribute('data-theme', savedTheme);
 
-// Apply theme colors from localStorage if they exist
-const savedCustomColors = localStorage.getItem('customColors');
-if (savedCustomColors) {
-  try {
-    const colors = JSON.parse(savedCustomColors);
-    const currentThemeColors = colors[savedTheme];
-    if (currentThemeColors) {
-      Object.entries(currentThemeColors).forEach(([key, value]) => {
-        document.documentElement.style.setProperty(`--${key}`, value);
-      });
-    }
-  } catch (error) {
-    console.error('Error applying saved theme colors:', error);
+// Define default theme colors
+const defaultThemes = {
+  default: {
+    background: '#080C14',
+    foreground: '#0A1628',
+    primary: '#2DD4BF',
+    secondary: '#1B2B44',
+    accent: '#14B8A6',
+    muted: '#1B2B44',
+    border: '#1B2B44',
+    'primary-foreground': '#080C14',
+    'secondary-foreground': '#E5E9F0',
+    'muted-foreground': '#94A3B8',
+  },
+  emerald: {
+    background: '#0f1f1a',
+    foreground: '#132d25',
+    primary: '#10b981',
+    secondary: '#1e4037',
+    accent: '#059669',
+    muted: '#1e4037',
+    border: '#1e4037',
+    'primary-foreground': '#0f1f1a',
+    'secondary-foreground': '#e2f5ef',
+    'muted-foreground': '#34d399',
+  },
+  purple: {
+    background: '#1E1B2E',
+    foreground: '#2A2640',
+    primary: '#B197FC',
+    secondary: '#433D66',
+    accent: '#9775FA',
+    muted: '#433D66',
+    border: '#433D66',
+    'primary-foreground': '#1E1B2E',
+    'secondary-foreground': '#F3F0FF',
+    'muted-foreground': '#D0BFFF',
+  },
+  ocean: {
+    background: '#042f49',
+    foreground: '#0c4a6e',
+    primary: '#38bdf8',
+    secondary: '#164e63',
+    accent: '#0ea5e9',
+    muted: '#164e63',
+    border: '#164e63',
+    'primary-foreground': '#042f49',
+    'secondary-foreground': '#e0f2fe',
+    'muted-foreground': '#7dd3fc',
+  },
+  sunset: {
+    background: '#18181B',
+    foreground: '#27272A',
+    primary: '#F97316',
+    secondary: '#3F3F46',
+    accent: '#F97316',
+    muted: '#3F3F46',
+    border: '#3F3F46',
+    'primary-foreground': '#18181B',
+    'secondary-foreground': '#FAFAFA',
+    'muted-foreground': '#A1A1AA',
+  },
+  'sunset-warm': {
+    background: '#1f1410',
+    foreground: '#4b2c1b',
+    primary: '#f59e0b',
+    secondary: '#713f12',
+    accent: '#fb923c',
+    muted: '#713f12',
+    border: '#713f12',
+    'primary-foreground': '#1f1410',
+    'secondary-foreground': '#fef3c7',
+    'muted-foreground': '#fcd34d',
+  },
+  monochrome: {
+    background: '#18181b',
+    foreground: '#27272a',
+    primary: '#e4e4e7',
+    secondary: '#3f3f46',
+    accent: '#d4d4d8',
+    muted: '#3f3f46',
+    border: '#3f3f46',
+    'primary-foreground': '#18181b',
+    'secondary-foreground': '#fafafa',
+    'muted-foreground': '#a1a1aa',
+  },
+  light: {
+    background: '#f8fafc',
+    foreground: '#f1f5f9',
+    primary: '#64748b',
+    secondary: '#e2e8f0',
+    accent: '#475569',
+    muted: '#e2e8f0',
+    border: '#e2e8f0',
+    'primary-foreground': '#f8fafc',
+    'secondary-foreground': '#0f172a',
+    'muted-foreground': '#64748b',
+  },
+  classic: {
+    background: '#ffffff',
+    foreground: '#f8f9fa',
+    primary: '#000000',
+    secondary: '#e9ecef',
+    accent: '#343a40',
+    muted: '#dee2e6',
+    border: '#dee2e6',
+    'primary-foreground': '#ffffff',
+    'secondary-foreground': '#212529',
+    'muted-foreground': '#6c757d',
   }
+};
+
+// Apply theme colors from localStorage if they exist, otherwise use defaults
+const savedCustomColors = localStorage.getItem('customColors');
+try {
+  const colors = savedCustomColors ? JSON.parse(savedCustomColors) : {};
+  const currentThemeColors = colors[savedTheme] || defaultThemes[savedTheme];
+  if (currentThemeColors) {
+    Object.entries(currentThemeColors).forEach(([key, value]) => {
+      document.documentElement.style.setProperty(`--${key}`, value);
+    });
+  }
+} catch (error) {
+  console.error('Error applying theme colors:', error);
+  // Fallback to default theme colors
+  const defaultColors = defaultThemes[savedTheme] || defaultThemes.default;
+  Object.entries(defaultColors).forEach(([key, value]) => {
+    document.documentElement.style.setProperty(`--${key}`, value);
+  });
 }
 
 // Remove any stale service worker
