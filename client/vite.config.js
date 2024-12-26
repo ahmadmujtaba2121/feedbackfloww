@@ -10,7 +10,6 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        'canvas': path.resolve(__dirname, './node_modules/canvas')
       }
     },
     define: {
@@ -21,7 +20,8 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID': JSON.stringify(env.VITE_FIREBASE_MESSAGING_SENDER_ID),
       'import.meta.env.VITE_FIREBASE_APP_ID': JSON.stringify(env.VITE_FIREBASE_APP_ID),
       'import.meta.env.VITE_FIREBASE_MEASUREMENT_ID': JSON.stringify(env.VITE_FIREBASE_MEASUREMENT_ID),
-      'import.meta.env.VITE_FIREBASE_DATABASE_URL': JSON.stringify(env.VITE_FIREBASE_DATABASE_URL)
+      'import.meta.env.VITE_FIREBASE_DATABASE_URL': JSON.stringify(env.VITE_FIREBASE_DATABASE_URL),
+      global: {}
     },
     build: {
       outDir: 'dist',
@@ -29,6 +29,7 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 5000,
       assetsDir: 'assets',
       rollupOptions: {
+        external: ['canvas'],
         output: {
           manualChunks: {
             vendor: [
@@ -93,9 +94,14 @@ export default defineConfig(({ mode }) => {
         'roughjs',
         'canvas-confetti'
       ],
-      exclude: ['canvas']
+      exclude: ['canvas', 'pdfjs-dist']
     },
     publicDir: 'public',
-    base: '/'
+    base: '/',
+    esbuild: {
+      supported: {
+        'top-level-await': true
+      }
+    }
   };
 });
