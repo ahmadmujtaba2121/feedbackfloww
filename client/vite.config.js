@@ -13,11 +13,12 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    chunkSizeWarningLimit: 3000,
     commonjsOptions: {
       include: [/node_modules/],
       extensions: ['.js', '.jsx'],
       strictRequires: true,
-      transformMixedEsModules: true,
+      transformMixedEsModules: true
     },
     rollupOptions: {
       output: {
@@ -26,7 +27,8 @@ export default defineConfig({
             'react',
             'react-dom',
             'react-router-dom',
-            'react-hotkeys-hook'
+            'react-hotkeys-hook',
+            'react-icons'
           ],
           firebase: [
             'firebase/app',
@@ -35,18 +37,21 @@ export default defineConfig({
             'firebase/storage',
             'firebase/database'
           ]
-        },
-      },
-    },
+        }
+      }
+    }
   },
   optimizeDeps: {
     include: [
+      'react-hotkeys-hook',
       'firebase/app',
       'firebase/auth',
       'firebase/firestore',
       'firebase/storage',
-      'firebase/database',
-      'react-hotkeys-hook'
-    ]
+      'firebase/database'
+    ],
+    esbuildOptions: {
+      target: 'es2020'
+    }
   }
 });
