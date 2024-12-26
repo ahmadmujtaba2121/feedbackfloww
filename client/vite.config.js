@@ -38,7 +38,12 @@ export default defineConfig(({ mode }) => {
               'firebase/auth',
               'firebase/firestore',
               'firebase/storage',
-              'firebase/database'
+              'firebase/database',
+              'react-colorful',
+              'react-color',
+              'react-beautiful-dnd',
+              'react-big-calendar',
+              'framer-motion'
             ]
           },
           assetFileNames: (assetInfo) => {
@@ -59,7 +64,12 @@ export default defineConfig(({ mode }) => {
         'firebase/auth',
         'firebase/firestore',
         'firebase/storage',
-        'firebase/database'
+        'firebase/database',
+        'react-colorful',
+        'react-color',
+        'react-beautiful-dnd',
+        'react-big-calendar',
+        'framer-motion'
       ]
     }
   };
