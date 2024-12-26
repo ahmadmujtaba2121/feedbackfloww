@@ -5,7 +5,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { FiPlus } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
-import { CelebrationEffects } from '../components/CelebrationEffects';
+import celebrateApproval from '../components/CelebrationEffects';
 import CreateProject from '../components/CreateProject';
 
 const ReviewStatusBadge = ({ status }) => {
@@ -161,8 +161,7 @@ const Dashboard = () => {
 
   return (
     <>
-      <CelebrationEffects status={recentStatusChange} shouldTrigger={!!recentStatusChange} />
-
+      {recentStatusChange && shouldTrigger && celebrateApproval()}
       <div className="min-h-screen bg-background pt-20 pb-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-8">
