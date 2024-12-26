@@ -132,6 +132,30 @@ const defaultThemes = {
     'primary-foreground': '#ffffff',
     'secondary-foreground': '#212529',
     'muted-foreground': '#6c757d',
+  },
+  'soft-sky': {
+    background: '#f8faff',
+    foreground: '#f1f5ff',
+    primary: '#4b6bfb',
+    secondary: '#e5eaff',
+    accent: '#3451e0',
+    muted: '#edf0ff',
+    border: '#e5eaff',
+    'primary-foreground': '#ffffff',
+    'secondary-foreground': '#1e293b',
+    'muted-foreground': '#6b7cb4',
+  },
+  'light-brown': {
+    background: '#faf6f1',
+    foreground: '#f5ebe0',
+    primary: '#8b5e34',
+    secondary: '#ddb892',
+    accent: '#6f4518',
+    muted: '#e6ccb2',
+    border: '#ddb892',
+    'primary-foreground': '#faf6f1',
+    'secondary-foreground': '#3f2305',
+    'muted-foreground': '#b08968',
   }
 };
 
