@@ -841,284 +841,275 @@ const KanbanBoard = () => {
   }
 
   if (loading) {
-    return (
-      <div className="h-full flex flex-col bg-slate-900">
-        <div className="p-4 bg-slate-800/50 border-b border-slate-700">
-          <div className="flex items-center justify-between">
-            <div className="h-6 w-32 bg-slate-700 rounded animate-pulse" />
-          </div>
-        </div>
-        <div className="flex-1 overflow-x-auto">
-          <LoadingSkeleton />
-        </div>
-      </div>
-    );
+    return <LoadingSkeleton />;
   }
 
   return (
-    <div className="h-full flex flex-col bg-slate-900">
-      <div className="p-4 bg-slate-800/50 border-b border-slate-700">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center">
-            <h2 className="text-xl font-semibold text-white">Task Board</h2>
-            {renderQuickAccessButtons()}
+    <DragDropContext onDragEnd={handleDragEnd}>
+      <div className="h-full flex flex-col bg-slate-900">
+        <div className="p-4 bg-slate-800/50 border-b border-slate-700">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <h2 className="text-xl font-semibold text-white">Task Board</h2>
+              {renderQuickAccessButtons()}
+            </div>
+            {project?.owner === currentUser?.email && (
+              <button
+                onClick={() => setIsAddingTask(true)}
+                className="flex items-center px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors"
+              >
+                <FiPlus className="mr-2" />
+                Add Task
+              </button>
+            )}
           </div>
-          {project?.owner === currentUser?.email && (
-            <button
-              onClick={() => setIsAddingTask(true)}
-              className="flex items-center px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors"
-            >
-              <FiPlus className="mr-2" />
-              Add Task
-            </button>
+
+          {/* Search and Filter Bar */}
+          <div className="flex flex-wrap gap-4 mb-4">
+            <div className="flex-1 min-w-[200px] relative">
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search tasks... Use @ to mention someone"
+                value={searchQuery}
+                onChange={handleSearchInput}
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-violet-500"
+              />
+              {/* Member suggestions dropdown */}
+              {showSuggestions && memberSuggestions.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {memberSuggestions.map(member => (
+                    <button
+                      key={member}
+                      onClick={() => handleMemberSelect(member)}
+                      className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 focus:outline-none focus:bg-slate-700"
+                    >
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center mr-2">
+                          {member.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="font-medium">{member.split('@')[0]}</div>
+                          <div className="text-xs text-slate-400">{member}</div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="w-40">
+              <select
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-violet-500"
+              >
+                <option value="all">All Priorities</option>
+                <option value="low">Low Priority</option>
+                <option value="medium">Medium Priority</option>
+                <option value="high">High Priority</option>
+              </select>
+            </div>
+            <div className="w-40">
+              <select
+                value={filterAssignee}
+                onChange={(e) => setFilterAssignee(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-violet-500"
+              >
+                <option value="all">All Assignees</option>
+                {Array.isArray(project?.members) && project.members.map(member => {
+                  if (typeof member !== 'string') return null;
+                  const displayName = member.includes('@') ? member.split('@')[0] : member;
+                  return (
+                    <option key={member} value={member}>
+                      {displayName}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+
+          {/* Task Creation Form */}
+          {isAddingTask && (
+            <div className="mt-4 bg-slate-700/50 rounded-lg p-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-white">Create New Task</h3>
+                <button
+                  onClick={() => setIsAddingTask(false)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+              <form onSubmit={handleCreateTask} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Title
+                  </label>
+                  <input
+                    type="text"
+                    value={newTask.title}
+                    onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
+                    placeholder="Task title"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={newTask.description}
+                    onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
+                    rows="3"
+                    placeholder="Task description"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Status
+                    </label>
+                    <select
+                      value={newTask.status}
+                      onChange={(e) => setNewTask({ ...newTask, status: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
+                    >
+                      {Object.entries(TASK_STATUSES).map(([value, { label }]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Priority
+                    </label>
+                    <select
+                      value={newTask.priority}
+                      onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Deadline
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={newTask.deadline}
+                      onChange={(e) => setNewTask({ ...newTask, deadline: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Notify Before (hours)
+                    </label>
+                    <input
+                      type="number"
+                      value={newTask.notifyBefore}
+                      onChange={(e) => setNewTask({ ...newTask, notifyBefore: parseInt(e.target.value) })}
+                      min="1"
+                      max="72"
+                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingTask(false)}
+                    className="px-4 py-2 text-slate-300 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600"
+                  >
+                    Create Task
+                  </button>
+                </div>
+              </form>
+            </div>
           )}
         </div>
 
-        {/* Search and Filter Bar */}
-        <div className="flex flex-wrap gap-4 mb-4">
-          <div className="flex-1 min-w-[200px] relative">
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search tasks... Use @ to mention someone"
-              value={searchQuery}
-              onChange={handleSearchInput}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-violet-500"
-            />
-            {/* Member suggestions dropdown */}
-            {showSuggestions && memberSuggestions.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                {memberSuggestions.map(member => (
-                  <button
-                    key={member}
-                    onClick={() => handleMemberSelect(member)}
-                    className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 focus:outline-none focus:bg-slate-700"
-                  >
-                    <div className="flex items-center">
-                      <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center mr-2">
-                        {member.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="font-medium">{member.split('@')[0]}</div>
-                        <div className="text-xs text-slate-400">{member}</div>
-                      </div>
+        {/* Quick Notes and TODO Panels */}
+        {showQuickNotes && <QuickNotesPanel />}
+        {showTodoPanel && <TodoPanel />}
+
+        {/* Kanban Board */}
+        <div className="flex-1 p-4 overflow-x-auto">
+          <div className="flex space-x-4 min-w-max">
+            {Object.entries(TASK_STATUSES).map(([status, config]) => (
+              <div key={status} className="w-80">
+                <div className={`p-3 rounded-t-lg ${config.bgColor} ${config.borderColor} border-b-0`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <config.icon className={`w-4 h-4 ${config.color}`} />
+                      <h3 className={`font-medium ${config.color}`}>{config.label}</h3>
                     </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="w-40">
-            <select
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-violet-500"
-            >
-              <option value="all">All Priorities</option>
-              <option value="low">Low Priority</option>
-              <option value="medium">Medium Priority</option>
-              <option value="high">High Priority</option>
-            </select>
-          </div>
-          <div className="w-40">
-            <select
-              value={filterAssignee}
-              onChange={(e) => setFilterAssignee(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-violet-500"
-            >
-              <option value="all">All Assignees</option>
-              {Array.isArray(project?.members) && project.members.map(member => {
-                if (typeof member !== 'string') return null;
-                const displayName = member.includes('@') ? member.split('@')[0] : member;
-                return (
-                  <option key={member} value={member}>
-                    {displayName}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-        </div>
-
-        {/* Task Creation Form */}
-        {isAddingTask && (
-          <div className="mt-4 bg-slate-700/50 rounded-lg p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-white">Create New Task</h3>
-              <button
-                onClick={() => setIsAddingTask(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                <FiX className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateTask} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  value={newTask.title}
-                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                  placeholder="Task title"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={newTask.description}
-                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                  rows="3"
-                  placeholder="Task description"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Status
-                  </label>
-                  <select
-                    value={newTask.status}
-                    onChange={(e) => setNewTask({ ...newTask, status: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                  >
-                    {Object.entries(TASK_STATUSES).map(([value, { label }]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Priority
-                  </label>
-                  <select
-                    value={newTask.priority}
-                    onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Deadline
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={newTask.deadline}
-                    onChange={(e) => setNewTask({ ...newTask, deadline: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Notify Before (hours)
-                  </label>
-                  <input
-                    type="number"
-                    value={newTask.notifyBefore}
-                    onChange={(e) => setNewTask({ ...newTask, notifyBefore: parseInt(e.target.value) })}
-                    min="1"
-                    max="72"
-                    className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddingTask(false)}
-                  className="px-4 py-2 text-slate-300 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600"
-                >
-                  Create Task
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-      </div>
-
-      {/* Quick Notes and TODO Panels */}
-      {showQuickNotes && <QuickNotesPanel />}
-      {showTodoPanel && <TodoPanel />}
-
-      {/* Kanban Board */}
-      <div className="flex-1 p-4 overflow-x-auto">
-        <div className="flex space-x-4 min-w-max">
-          {Object.entries(TASK_STATUSES).map(([status, config]) => (
-            <div key={status} className="w-80">
-              <div className={`p-3 rounded-t-lg ${config.bgColor} ${config.borderColor} border-b-0`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <config.icon className={`w-4 h-4 ${config.color}`} />
-                    <h3 className={`font-medium ${config.color}`}>{config.label}</h3>
+                    <span className={`text-sm ${config.color}`}>
+                      {getTasksByStatus(status).length}
+                    </span>
                   </div>
-                  <span className={`text-sm ${config.color}`}>
-                    {getTasksByStatus(status).length}
-                  </span>
+                </div>
+                <div
+                  onDragOver={(e) => handleDragOver(e, status)}
+                  onDrop={(e) => handleDrop(e, status)}
+                  className={`min-h-[200px] p-2 rounded-b-lg border ${config.borderColor} ${config.bgColor
+                    } transition-colors ${dragOverStatus === status
+                      ? 'border-violet-500 ring-2 ring-violet-500/50 bg-opacity-70'
+                      : ''
+                    }`}
+                >
+                  {getTasksByStatus(status).map((task) => (
+                    <motion.div
+                      key={task.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, task)}
+                      onDragEnd={handleDragEnd}
+                      className={`mb-2 cursor-move select-none ${draggingTask?.id === task.id ? 'opacity-50' : ''
+                        }`}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      {renderTaskWithPin(task)}
+                    </motion.div>
+                  ))}
+                  {dragOverStatus === status && (
+                    <div className="h-2 bg-violet-500/20 rounded-lg mt-2 transition-all duration-200" />
+                  )}
                 </div>
               </div>
-              <div
-                onDragOver={(e) => handleDragOver(e, status)}
-                onDrop={(e) => handleDrop(e, status)}
-                className={`min-h-[200px] p-2 rounded-b-lg border ${config.borderColor} ${config.bgColor
-                  } transition-colors ${dragOverStatus === status
-                    ? 'border-violet-500 ring-2 ring-violet-500/50 bg-opacity-70'
-                    : ''
-                  }`}
-              >
-                {getTasksByStatus(status).map((task) => (
-                  <motion.div
-                    key={task.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, task)}
-                    onDragEnd={handleDragEnd}
-                    className={`mb-2 cursor-move select-none ${draggingTask?.id === task.id ? 'opacity-50' : ''
-                      }`}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    {renderTaskWithPin(task)}
-                  </motion.div>
-                ))}
-                {dragOverStatus === status && (
-                  <div className="h-2 bg-violet-500/20 rounded-lg mt-2 transition-all duration-200" />
-                )}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Task Statistics */}
-      <div className="p-4 bg-slate-800/50 border-t border-slate-700">
-        <div className="flex justify-between text-sm text-slate-400">
-          <div>Total Tasks: {filteredTasks.length}</div>
-          <div>Filtered Tasks: {filteredTasks.length} / {tasks.length}</div>
-          <div>Last Updated: {formatTimestamp(lastUpdate)}</div>
+        {/* Task Statistics */}
+        <div className="p-4 bg-slate-800/50 border-t border-slate-700">
+          <div className="flex justify-between text-sm text-slate-400">
+            <div>Total Tasks: {filteredTasks.length}</div>
+            <div>Filtered Tasks: {filteredTasks.length} / {tasks.length}</div>
+            <div>Last Updated: {formatTimestamp(lastUpdate)}</div>
+          </div>
         </div>
-      </div>
 
-      {/* Subtask Modal */}
-      {showSubtaskModal && <SubtaskModal />}
-    </div>
+        {/* Subtask Modal */}
+        {showSubtaskModal && <SubtaskModal />}
+      </div>
+    </DragDropContext>
   );
 };
 

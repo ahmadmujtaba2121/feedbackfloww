@@ -1,33 +1,39 @@
 import React, { useEffect } from 'react';
-import confetti from 'canvas-confetti';
 
 const celebrateApproval = () => {
-  // Shoot confetti from the center
-  confetti({
-    particleCount: 100,
-    spread: 70,
-    origin: { y: 0.6 },
-    colors: ['#22c55e', '#4ade80', '#86efac']
+  // Load canvas-confetti dynamically
+  import('canvas-confetti').then(module => {
+    const confetti = module.default;
+
+    // Shoot confetti from the center
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#22c55e', '#4ade80', '#86efac']
+    });
+
+    // Shoot from both sides
+    setTimeout(() => {
+      confetti({
+        particleCount: 50,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0 },
+        colors: ['#22c55e', '#4ade80', '#86efac']
+      });
+
+      confetti({
+        particleCount: 50,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1 },
+        colors: ['#22c55e', '#4ade80', '#86efac']
+      });
+    }, 250);
+  }).catch(error => {
+    console.error('Failed to load confetti:', error);
   });
-
-  // Shoot from both sides
-  setTimeout(() => {
-    confetti({
-      particleCount: 50,
-      angle: 60,
-      spread: 55,
-      origin: { x: 0 },
-      colors: ['#22c55e', '#4ade80', '#86efac']
-    });
-
-    confetti({
-      particleCount: 50,
-      angle: 120,
-      spread: 55,
-      origin: { x: 1 },
-      colors: ['#22c55e', '#4ade80', '#86efac']
-    });
-  }, 250);
 };
 
 const celebrateRejection = () => {

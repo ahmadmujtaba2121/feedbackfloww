@@ -33,16 +33,9 @@ export default defineConfig(({ mode }) => {
               'react',
               'react-dom',
               'react-router-dom',
-              'react-hotkeys-hook',
               'react-beautiful-dnd',
+              'react-hotkeys-hook',
               'canvas-confetti'
-            ],
-            firebase: [
-              'firebase/app',
-              'firebase/auth',
-              'firebase/firestore',
-              'firebase/storage',
-              'firebase/database'
             ]
           }
         }
@@ -59,8 +52,8 @@ export default defineConfig(({ mode }) => {
         'firebase/storage',
         'firebase/database',
         'react-hotkeys-hook',
-        'canvas-confetti',
-        'react-beautiful-dnd'
+        'react-beautiful-dnd',
+        'canvas-confetti'
       ]
     }
   };
