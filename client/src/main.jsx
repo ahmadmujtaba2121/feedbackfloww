@@ -2,25 +2,31 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { HelmetProvider } from 'react-helmet-async'
 import App from './App'
 import './index.css'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import ErrorBoundary from './components/ErrorBoundary'
 
-// Get saved theme or use default
+// Initialize theme
 const savedTheme = localStorage.getItem('theme') || 'default';
 document.documentElement.setAttribute('data-theme', savedTheme);
+
+// Remove any stale service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function (registrations) {
+    for (let registration of registrations) {
+      registration.unregister()
+    }
+  })
+}
 
 const root = ReactDOM.createRoot(document.getElementById('root'))
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      <HelmetProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </HelmetProvider>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
     </ErrorBoundary>
   </React.StrictMode>
 )

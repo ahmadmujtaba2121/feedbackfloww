@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       sourcemap: true,
       chunkSizeWarningLimit: 3000,
+      assetsDir: 'assets',
       rollupOptions: {
         output: {
           manualChunks: {
@@ -33,11 +34,18 @@ export default defineConfig(({ mode }) => {
               'react',
               'react-dom',
               'react-router-dom',
-              'react-beautiful-dnd',
-              'react-hotkeys-hook',
-              'canvas-confetti',
-              'react-colorful'
+              'firebase/app',
+              'firebase/auth',
+              'firebase/firestore',
+              'firebase/storage',
+              'firebase/database'
             ]
+          },
+          assetFileNames: (assetInfo) => {
+            if (assetInfo.name.endsWith('.woff2')) {
+              return 'fonts/[name][extname]';
+            }
+            return 'assets/[name]-[hash][extname]';
           }
         }
       }
@@ -51,11 +59,7 @@ export default defineConfig(({ mode }) => {
         'firebase/auth',
         'firebase/firestore',
         'firebase/storage',
-        'firebase/database',
-        'react-hotkeys-hook',
-        'react-beautiful-dnd',
-        'canvas-confetti',
-        'react-colorful'
+        'firebase/database'
       ]
     }
   };
