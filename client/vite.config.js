@@ -54,14 +54,20 @@ export default defineConfig(({ mode }) => {
               'canvas-confetti',
               'date-fns',
               'emoji-picker-react',
-              'lodash'
+              'lodash',
+              'react-syntax-highlighter'
             ]
           },
           assetFileNames: (assetInfo) => {
-            if (assetInfo.name.endsWith('.woff2')) {
-              return 'fonts/[name][extname]';
+            const info = assetInfo.name.split('.');
+            const extType = info[info.length - 1];
+            if (/\.(woff|woff2|eot|ttf|otf)$/.test(assetInfo.name)) {
+              return `fonts/[name][extname]`;
             }
-            return 'assets/[name]-[hash][extname]';
+            if (/\.(png|jpe?g|svg|gif|tiff|bmp|ico)$/.test(assetInfo.name)) {
+              return `images/[name][extname]`;
+            }
+            return `assets/[name]-[hash][extname]`;
           }
         }
       }
@@ -90,7 +96,8 @@ export default defineConfig(({ mode }) => {
         'canvas-confetti',
         'date-fns',
         'emoji-picker-react',
-        'lodash'
+        'lodash',
+        'react-syntax-highlighter'
       ],
       exclude: ['canvas']
     }

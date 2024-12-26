@@ -16,8 +16,9 @@ import { debounce } from 'lodash';
 import DraggableFile from './DraggableFile';
 import PDFObject from './PDFObject';
 import CodeBlock from './CodeBlock';
-import { uploadFileToSupabase } from '../../lib/supabase';
 import { PremiumFeature } from '../PremiumFeature';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { storage } from '../../firebase/firebase';
 
 const CANVAS_WIDTH = 1920;
 const CANVAS_HEIGHT = 1080;
@@ -388,109 +389,23 @@ const Canvas = ({ layers = [], setLayers, activeTool, activeLayerId, scale = 1, 
     setTextInput(null);
   };
 
-  const handleFileUpload = async (files) => {
-    if (!projectId || !files.length) return;
-
+  const handleFileUpload = async (file) => {
     try {
-      const file = files[0]; // Handle one file at a time
+      const storageRef = ref(storage, `projects/${projectId}/${Date.now()}-${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
 
-      // Check for allowed file types
-      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
-      if (!allowedTypes.includes(file.type)) {
-        toast.error(
-          <div className="text-sm">
-            <p className="font-medium mb-1">Unsupported file type</p>
-            <p className="text-slate-200">As a solo developer project, we currently only support PNG, JPG, and SVG files to keep costs manageable.</p>
-            <p className="text-slate-300 mt-1">Thank you for understanding! 🙏</p>
-          </div>,
-          { duration: 5000 }
-        );
-        return;
-      }
-
-      let uploadResult;
-
-      if (file.type === 'image/svg+xml') {
-        // Use Supabase for SVGs
-        uploadResult = await uploadFileToSupabase(file, projectId);
-      } else {
-        // Use Cloudinary for PNG/JPG
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', 'ukecpfrg');
-        formData.append('folder', `feedbackflow/projects/${projectId}`);
-
-        const response = await fetch(
-          'https://api.cloudinary.com/v1_1/dysa2jeyb/upload',
-          {
-            method: 'POST',
-            body: formData,
-          }
-        );
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || 'Upload failed');
-        }
-
-        const data = await response.json();
-        uploadResult = {
-          url: data.secure_url,
-          path: data.public_id,
-          name: file.name,
-          type: file.type,
-          size: file.size
-        };
-      }
-
-      // Create a new layer for the file
-      const newLayer = {
-        id: `layer-${Date.now()}`,
-        name: file.name,
-        type: file.type === 'image/svg+xml' ? 'svg' : 'image',
-        visible: true,
-        locked: false,
-        content: [{
-          id: `file-${Date.now()}`,
-          type: file.type === 'image/svg+xml' ? 'svg' : 'image',
-          name: file.name,
-          content: uploadResult.url,
-          position: { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 },
-          size: {
-            width: file.type === 'image/svg+xml' ? 400 : 300,
-            height: file.type === 'image/svg+xml' ? 400 : 300
-          },
-          scale: 1,
-          rotation: 0
-        }]
-      };
-
-      const updatedLayers = [...layers, newLayer];
-      setLayers(updatedLayers);
-      setSelectedFile(newLayer.content[0].id);
-      setActiveLayerId(newLayer.id);
-
-      const fileData = {
-        id: `file-${Date.now()}`,
+      return {
+        url: downloadURL,
+        path: storageRef.fullPath,
         name: file.name,
         type: file.type,
-        url: uploadResult.url,
-        path: uploadResult.path,
-        uploadedAt: new Date().toISOString(),
-        uploadedBy: currentUser?.email,
-        storage: file.type === 'image/svg+xml' ? 'supabase' : 'cloudinary'
+        size: file.size
       };
-
-      const projectRef = doc(db, 'projects', projectId);
-      await updateDoc(projectRef, {
-        files: arrayUnion(fileData),
-        layers: updatedLayers,
-        lastModified: serverTimestamp()
-      });
-
-      toast.success(`${file.type === 'image/svg+xml' ? 'SVG' : 'Image'} uploaded successfully`);
     } catch (error) {
-      handleError(error, ErrorTypes.FILE_OPERATION);
+      console.error('Error uploading file:', error);
+      toast.error('Failed to upload file');
+      throw error;
     }
   };
 
@@ -958,6 +873,19 @@ const Canvas = ({ layers = [], setLayers, activeTool, activeLayerId, scale = 1, 
     } catch (error) {
       console.error('Error requesting changes:', error);
       toast.error('Failed to request changes');
+    }
+  };
+
+  const handleDelete = async (file) => {
+    try {
+      const fileRef = ref(storage, file.path);
+      await deleteObject(fileRef);
+      // Update UI after successful deletion
+      setFiles(prevFiles => prevFiles.filter(f => f.path !== file.path));
+      toast.success('File deleted successfully');
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      toast.error('Failed to delete file');
     }
   };
 
