@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background-light: #ffffff;
+  --text-light: #1e293b;
+  --background-dark: #0f172a;
+  --text-dark: #ffffff;
+}
+
+/* Light theme variables */
+:root[class~="light"] {
+  --background: var(--background-light);
+  --text: var(--text-light);
+}
+
+/* Dark theme variables */
+:root[class~="dark"] {
+  --background: var(--background-dark);
+  --text: var(--text-dark);
+}
+
+/* Smooth transitions for theme changes */
+* {
+  transition-property: color, background-color, border-color;
+  transition-duration: 200ms;
+  transition-timing-function: ease-in-out;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text);
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom scrollbar for both themes */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-primary/50 rounded-full hover:bg-primary;
+}
+
+/* Light theme specific styles */
+.light {
+  --tw-bg-opacity: 1;
+  background-color: var(--background);
+}
+
+.light .bg-card {
+  --tw-bg-opacity: 1;
+  background-color: var(--foreground);
+  border: 1px solid var(--border);
+}
+
+.light .text-primary {
+  --tw-text-opacity: 1;
+  color: var(--primary);
+}
+
+.light .text-secondary {
+  --tw-text-opacity: 1;
+  color: var(--secondary);
+}
+
+/* Dark theme specific styles */
+.dark {
+  --tw-bg-opacity: 1;
+  background-color: var(--background);
+}
+
+.dark .bg-card {
+  --tw-bg-opacity: 1;
+  background-color: var(--foreground);
+  border: 1px solid var(--border);
+}
+
+.dark .text-primary {
+  --tw-text-opacity: 1;
+  color: var(--primary);
+}
+
+.dark .text-secondary {
+  --tw-text-opacity: 1;
+  color: var(--secondary);
+}

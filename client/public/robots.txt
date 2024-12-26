@@ -1,0 +1,16 @@
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://feedbackflow.app/sitemap.xml
+
+# Disallow sensitive routes
+Disallow: /api/
+Disallow: /admin/
+Disallow: /auth/
+Disallow: /settings/
+Disallow: /profile/
+
+# Crawl-delay for rate limiting
+Crawl-delay: 1 

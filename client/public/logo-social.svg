@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="1200" viewBox="0 0 1200 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="1200" fill="#080C14"/>
+  
+  <!-- Outer Circle with Gradient -->
+  <circle cx="600" cy="600" r="500" fill="url(#gradient)"/>
+  
+  <!-- Main Chat Bubble -->
+  <path d="M350 450C350 405.817 385.817 370 430 370H770C814.183 370 850 405.817 850 450V750C850 794.183 814.183 830 770 830H430C385.817 830 350 794.183 350 750V450Z" fill="white"/>
+  
+  <!-- Flow Lines -->
+  <path d="M450 520H750M450 650H600" stroke="#4C1D95" stroke-width="40" stroke-linecap="round"/>
+  
+  <!-- Dots -->
+  <circle cx="680" cy="650" r="20" fill="#4C1D95"/>
+  <circle cx="750" cy="650" r="20" fill="#4C1D95"/>
+  
+  <!-- Decorative Flow Elements -->
+  <path d="M250 600C250 450 400 300 600 300" stroke="#8B5CF6" stroke-width="20" stroke-linecap="round" opacity="0.3"/>
+  <path d="M950 600C950 750 800 900 600 900" stroke="#8B5CF6" stroke-width="20" stroke-linecap="round" opacity="0.3"/>
+  
+  <!-- Text with Plus Jakarta Sans -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700&amp;display=swap');
+  </style>
+  <text x="600" y="1050" text-anchor="middle" fill="white" font-family="'Plus Jakarta Sans', sans-serif" font-size="120" font-weight="700" letter-spacing="2">
+    FeedbackFlow
+  </text>
+  
+  <!-- Gradient Definition -->
+  <defs>
+    <linearGradient id="gradient" x1="600" y1="100" x2="600" y2="1100" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#4C1D95"/>
+    </linearGradient>
+  </defs>
+</svg> 
