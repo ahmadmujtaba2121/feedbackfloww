@@ -9,6 +9,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import PrivateRoute from './components/PrivateRoute';
 import Navigation from './components/Navigation';
 import LoadingSpinner from './components/LoadingSpinner';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Lazy load components
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -48,43 +49,58 @@ const AppContent = () => {
   const isInvitePath = location.pathname.includes('/invite/');
 
   return (
-    <div className="min-h-screen bg-[#080C14]">
-      <Toaster position="top-right" />
-      {!isCanvasPage && !isInvitePath && <Navigation />}
-      <Suspense fallback={<LoadingSpinner />}>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<HomePage />} />
-          <Route path="/signin" element={<SignIn />} />
-          <Route path="/signup" element={<SignupPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
+    <div className="min-h-screen bg-background">
+      <ErrorBoundary fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-secondary-foreground mb-4">Something went wrong</h1>
+            <p className="text-muted-foreground mb-6">We're having trouble loading this page</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      }>
+        <Toaster position="top-right" />
+        {!isCanvasPage && !isInvitePath && <Navigation />}
+        <Suspense fallback={<LoadingSpinner />}>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<HomePage />} />
+            <Route path="/signin" element={<SignIn />} />
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/pricing" element={<PricingPage />} />
 
-          {/* Protected routes */}
-          <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-          <Route path="/ai" element={<PrivateRoute><AIPage /></PrivateRoute>} />
-          <Route path="/.ai" element={<Navigate to="/ai" replace />} />
-          <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
+            {/* Protected routes */}
+            <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+            <Route path="/ai" element={<PrivateRoute><AIPage /></PrivateRoute>} />
+            <Route path="/.ai" element={<Navigate to="/ai" replace />} />
+            <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
 
-          {/* Project routes */}
-          <Route path="/project/:projectId" element={<PrivateRoute><ProjectView /></PrivateRoute>} />
-          <Route path="/project/:projectId/canvas" element={<PrivateRoute><CanvasPage /></PrivateRoute>} />
-          <Route path="/project/:projectId/kanban" element={<PrivateRoute><KanbanPage /></PrivateRoute>} />
-          <Route path="/project/:projectId/calendar" element={<PrivateRoute><CalendarPage /></PrivateRoute>} />
-          <Route path="/project/:projectId/ai-assistant" element={<PrivateRoute><AIAssistant /></PrivateRoute>} />
+            {/* Project routes */}
+            <Route path="/project/:projectId" element={<PrivateRoute><ProjectView /></PrivateRoute>} />
+            <Route path="/project/:projectId/canvas" element={<PrivateRoute><CanvasPage /></PrivateRoute>} />
+            <Route path="/project/:projectId/kanban" element={<PrivateRoute><KanbanPage /></PrivateRoute>} />
+            <Route path="/project/:projectId/calendar" element={<PrivateRoute><CalendarPage /></PrivateRoute>} />
+            <Route path="/project/:projectId/ai-assistant" element={<PrivateRoute><AIAssistant /></PrivateRoute>} />
 
-          {/* Invite routes */}
-          <Route path="/invite/:projectId/:inviteId" element={<PrivateRoute><InvitePage /></PrivateRoute>} />
-          <Route path="/invite/:projectId/:inviteId/canvas" element={<PrivateRoute><CanvasPage isInviteLink={true} /></PrivateRoute>} />
-          <Route path="/invite/:projectId/:inviteId/kanban" element={<PrivateRoute><KanbanPage isInviteLink={true} /></PrivateRoute>} />
-          <Route path="/invite/:projectId/:inviteId/calendar" element={<PrivateRoute><CalendarPage isInviteLink={true} /></PrivateRoute>} />
+            {/* Invite routes */}
+            <Route path="/invite/:projectId/:inviteId" element={<PrivateRoute><InvitePage /></PrivateRoute>} />
+            <Route path="/invite/:projectId/:inviteId/canvas" element={<PrivateRoute><CanvasPage isInviteLink={true} /></PrivateRoute>} />
+            <Route path="/invite/:projectId/:inviteId/kanban" element={<PrivateRoute><KanbanPage isInviteLink={true} /></PrivateRoute>} />
+            <Route path="/invite/:projectId/:inviteId/calendar" element={<PrivateRoute><CalendarPage isInviteLink={true} /></PrivateRoute>} />
 
-          {/* User guide route */}
-          <Route path="/guide" element={<PrivateRoute><UserGuidePage /></PrivateRoute>} />
+            {/* User guide route */}
+            <Route path="/guide" element={<PrivateRoute><UserGuidePage /></PrivateRoute>} />
 
-          {/* Catch all route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+            {/* Catch all route */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </div>
   );
 };

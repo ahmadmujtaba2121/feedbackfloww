@@ -23,6 +23,22 @@ window.addEventListener('error', (event) => {
 const savedTheme = localStorage.getItem('theme') || 'default';
 document.documentElement.setAttribute('data-theme', savedTheme);
 
+// Apply theme colors from localStorage if they exist
+const savedCustomColors = localStorage.getItem('customColors');
+if (savedCustomColors) {
+  try {
+    const colors = JSON.parse(savedCustomColors);
+    const currentThemeColors = colors[savedTheme];
+    if (currentThemeColors) {
+      Object.entries(currentThemeColors).forEach(([key, value]) => {
+        document.documentElement.style.setProperty(`--${key}`, value);
+      });
+    }
+  } catch (error) {
+    console.error('Error applying saved theme colors:', error);
+  }
+}
+
 // Remove any stale service worker
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(function (registrations) {
@@ -44,8 +60,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               toastOptions={{
                 duration: 3000,
                 style: {
-                  background: '#1E293B',
-                  color: '#E2E8F0',
+                  background: 'var(--foreground)',
+                  color: 'var(--secondary-foreground)',
                 }
               }}
             />

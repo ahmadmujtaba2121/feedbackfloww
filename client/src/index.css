@@ -45,3 +45,97 @@ code {
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  /* Default theme */
+  --background: #080C14;
+  --foreground: #0A1628;
+  --primary: #2DD4BF;
+  --secondary: #1B2B44;
+  --accent: #14B8A6;
+  --muted: #1B2B44;
+  --border: #1B2B44;
+  --primary-foreground: #080C14;
+  --secondary-foreground: #E5E9F0;
+  --muted-foreground: #94A3B8;
+}
+
+[data-theme="monochrome"] {
+  --background: #18181b;
+  --foreground: #27272a;
+  --primary: #e4e4e7;
+  --secondary: #3f3f46;
+  --accent: #d4d4d8;
+  --muted: #3f3f46;
+  --border: #3f3f46;
+  --primary-foreground: #18181b;
+  --secondary-foreground: #fafafa;
+  --muted-foreground: #a1a1aa;
+}
+
+[data-theme="light"] {
+  --background: #f8fafc;
+  --foreground: #f1f5f9;
+  --primary: #64748b;
+  --secondary: #e2e8f0;
+  --accent: #475569;
+  --muted: #e2e8f0;
+  --border: #e2e8f0;
+  --primary-foreground: #f8fafc;
+  --secondary-foreground: #0f172a;
+  --muted-foreground: #64748b;
+}
+
+/* Apply theme variables to Tailwind classes */
+.bg-background {
+  background-color: var(--background);
+}
+
+.bg-foreground {
+  background-color: var(--foreground);
+}
+
+.bg-primary {
+  background-color: var(--primary);
+}
+
+.bg-secondary {
+  background-color: var(--secondary);
+}
+
+.bg-accent {
+  background-color: var(--accent);
+}
+
+.bg-muted {
+  background-color: var(--muted);
+}
+
+.border-border {
+  border-color: var(--border);
+}
+
+.text-primary-foreground {
+  color: var(--primary-foreground);
+}
+
+.text-secondary-foreground {
+  color: var(--secondary-foreground);
+}
+
+.text-muted-foreground {
+  color: var(--muted-foreground);
+}
+
+/* Base styles */
+body {
+  background-color: var(--background);
+  color: var(--secondary-foreground);
+}
+
+/* Ensure minimum height for app container */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
