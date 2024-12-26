@@ -23,6 +23,7 @@
     "pdfjs-dist": "3.11.174",
     "re-resizable": "^6.10.3",
     "react": "^18.2.0",
+    "react-beautiful-dnd": "^13.1.1",
     "react-big-calendar": "^1.17.1",
     "react-color": "^2.19.3",
     "react-dom": "^18.2.0",
