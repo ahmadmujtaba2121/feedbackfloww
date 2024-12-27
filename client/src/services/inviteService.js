@@ -18,37 +18,20 @@ export const createProjectInvite = async (projectId, creatorEmail, type = 'view'
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       used: false,
-      status: 'active'
+      status: 'active',
+      role: type === 'view' ? 'viewer' : 'editor'
     };
 
-    // Add invite to the appropriate array based on type
-    if (type === 'view') {
-      await updateDoc(projectRef, {
-        viewerLinks: arrayUnion({
-          ...invite,
-          role: 'viewer'
-        }),
-        activityLog: arrayUnion({
-          type: 'invite_created',
-          user: creatorEmail,
-          inviteType: 'viewer',
-          timestamp: new Date().toISOString()
-        })
-      });
-    } else {
-      await updateDoc(projectRef, {
-        editorLinks: arrayUnion({
-          ...invite,
-          role: 'editor'
-        }),
-        activityLog: arrayUnion({
-          type: 'invite_created',
-          user: creatorEmail,
-          inviteType: 'editor',
-          timestamp: new Date().toISOString()
-        })
-      });
-    }
+    // Store the full invite object in the invites array
+    await updateDoc(projectRef, {
+      invites: arrayUnion(invite),
+      activityLog: arrayUnion({
+        type: 'invite_created',
+        user: creatorEmail,
+        inviteType: invite.role,
+        timestamp: new Date().toISOString()
+      })
+    });
 
     const inviteLink = `${window.location.origin}/invite/${projectId}/${invite.id}`;
     return {
@@ -63,26 +46,25 @@ export const createProjectInvite = async (projectId, creatorEmail, type = 'view'
 
 export const validateInvite = async (inviteId) => {
   try {
+    // Query all projects since we can't do array-contains with a partial object match
     const projectsRef = collection(db, 'projects');
-    const projectsSnapshot = await getDocs(
-      query(projectsRef,
-        where('viewerLinks', 'array-contains', { id: inviteId }),
-        where('editorLinks', 'array-contains', { id: inviteId })
-      )
-    );
+    const projectsSnapshot = await getDocs(projectsRef);
 
-    if (projectsSnapshot.empty) {
-      throw new Error('Invite not found');
+    let projectDoc = null;
+    let invite = null;
+
+    // Find the project containing the invite
+    for (const doc of projectsSnapshot.docs) {
+      const projectData = doc.data();
+      const foundInvite = (projectData.invites || []).find(link => link.id === inviteId);
+      if (foundInvite) {
+        projectDoc = doc;
+        invite = foundInvite;
+        break;
+      }
     }
 
-    const projectDoc = projectsSnapshot.docs[0];
-    const projectData = projectDoc.data();
-
-    // Find the invite in either viewerLinks or editorLinks
-    const invite = [...(projectData.viewerLinks || []), ...(projectData.editorLinks || [])]
-      .find(link => link.id === inviteId);
-
-    if (!invite) {
+    if (!projectDoc || !invite) {
       throw new Error('Invite not found');
     }
 
@@ -119,9 +101,8 @@ export const acceptInvite = async (projectId, inviteId, userEmail) => {
 
     const projectData = projectDoc.data();
 
-    // Find the invite in either viewerLinks or editorLinks
-    const invite = [...(projectData.viewerLinks || []), ...(projectData.editorLinks || [])]
-      .find(link => link.id === inviteId);
+    // Find the invite in the invites array
+    const invite = (projectData.invites || []).find(link => link.id === inviteId);
 
     if (!invite) {
       throw new Error('Invite not found');
@@ -139,6 +120,11 @@ export const acceptInvite = async (projectId, inviteId, userEmail) => {
       throw new Error('Invite is no longer active');
     }
 
+    // Check if invite has already been used
+    if (invite.used) {
+      throw new Error('This invite has already been used');
+    }
+
     // Update invite to mark it as used
     const updatedInvite = {
       ...invite,
@@ -147,10 +133,14 @@ export const acceptInvite = async (projectId, inviteId, userEmail) => {
       lastUsedAt: new Date().toISOString()
     };
 
+    // Remove old invite and add updated one
+    const newInvites = (projectData.invites || []).filter(link => link.id !== inviteId);
+    newInvites.push(updatedInvite);
+
     // Add user based on invite role
     if (invite.role === 'editor') {
       await updateDoc(projectRef, {
-        editorLinks: arrayUnion(updatedInvite),
+        invites: newInvites,
         [`editors.${userEmail}`]: {
           role: 'editor',
           joinedAt: serverTimestamp(),
@@ -165,7 +155,7 @@ export const acceptInvite = async (projectId, inviteId, userEmail) => {
       });
     } else {
       await updateDoc(projectRef, {
-        viewerLinks: arrayUnion(updatedInvite),
+        invites: newInvites,
         [`viewers.${userEmail}`]: {
           role: 'viewer',
           joinedAt: serverTimestamp(),
