@@ -29,6 +29,7 @@ const ReviewPanel = ({
   const [lastStatusUpdate, setLastStatusUpdate] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const panelWidth = expanded ? 'w-80' : 'w-12';
 
   // Subscribe to real-time updates for the review
   useEffect(() => {
@@ -123,8 +124,6 @@ const ReviewPanel = ({
       setIsUpdating(false);
     }
   };
-
-  const panelWidth = expanded ? 'w-80' : 'w-12';
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -515,81 +514,6 @@ const ReviewPanel = ({
             )}
           </div>
         </motion.div>
-      )}
-
-      {/* Preview Modal */}
-      {previewFile && (
-        <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80"
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          <div
-            className="relative w-full max-w-5xl h-full max-h-[90vh] bg-slate-900 rounded-lg overflow-hidden"
-            onContextMenu={(e) => e.preventDefault()}
-          >
-            {/* Modal Header */}
-            <div className="absolute top-4 right-4 z-10 flex gap-2">
-              <button
-                onClick={closePreview}
-                className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-slate-300"
-                title="Close preview"
-              >
-                <FiX className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Preview Content */}
-            <div
-              className="w-full h-full overflow-auto p-8 select-none"
-              onContextMenu={(e) => e.preventDefault()}
-              onCopy={(e) => e.preventDefault()}
-              onDragStart={(e) => e.preventDefault()}
-            >
-              <div className="relative w-full h-full flex items-center justify-center">
-                {previewFile.type.startsWith('image/') ? (
-                  <div
-                    className="relative w-full h-full flex items-center justify-center"
-                    onContextMenu={(e) => e.preventDefault()}
-                    onDragStart={(e) => e.preventDefault()}
-                  >
-                    <WatermarkedImage
-                      src={previewFile.url}
-                      watermark="FeedbackFlow Preview"
-                      className="max-w-full max-h-full object-contain pointer-events-none select-none"
-                      style={{
-                        WebkitUserSelect: 'none',
-                        userSelect: 'none',
-                        pointerEvents: 'none'
-                      }}
-                    />
-                  </div>
-                ) : previewFile.type === 'application/pdf' ? (
-                  <div
-                    className="relative w-full h-full"
-                    onContextMenu={(e) => e.preventDefault()}
-                    onDragStart={(e) => e.preventDefault()}
-                  >
-                    <WatermarkedPDF
-                      url={previewFile.url}
-                      watermark="FeedbackFlow Preview"
-                      preventDownload={true}
-                      className="pointer-events-none select-none"
-                      style={{
-                        WebkitUserSelect: 'none',
-                        userSelect: 'none',
-                        pointerEvents: 'none'
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="text-slate-400">
-                    This file type cannot be previewed
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </AnimatePresence>
   );

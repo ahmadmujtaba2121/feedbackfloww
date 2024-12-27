@@ -3,14 +3,14 @@ import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import Canvas from '../components/Canvas';
+import Canvas from '../components/Canvas/Canvas';
 import ProjectSidebar from '../components/ProjectSidebar';
 import ReviewPanel from '../components/ReviewPanel';
 
 export default function CanvasPage() {
   const { projectId } = useParams();
   const { currentUser } = useAuth();
-  
+
   // Check if current user is the owner of the project
   const [isOwner, setIsOwner] = useState(false);
 
@@ -18,7 +18,7 @@ export default function CanvasPage() {
     const checkOwnership = async () => {
       const projectRef = doc(db, 'projects', projectId);
       const projectSnap = await getDoc(projectRef);
-      
+
       if (projectSnap.exists()) {
         setIsOwner(projectSnap.data().ownerId === currentUser.uid);
       }

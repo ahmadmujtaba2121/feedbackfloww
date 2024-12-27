@@ -10,6 +10,20 @@ const LayerPanel = ({ projectId, layers = [], setLayers, activeLayerId, setActiv
   const [editingLayerId, setEditingLayerId] = useState(null);
   const [editingName, setEditingName] = useState('');
 
+  const startEditing = (layer) => {
+    setEditingLayerId(layer.id);
+    setEditingName(layer.name);
+  };
+
+  const handleKeyDown = (e, layerId) => {
+    if (e.key === 'Enter') {
+      handleLayerNameEdit(layerId, editingName);
+    } else if (e.key === 'Escape') {
+      setEditingLayerId(null);
+      setEditingName('');
+    }
+  };
+
   const handleLayerNameEdit = async (layerId, newName) => {
     if (!newName.trim()) {
       toast.error('Layer name cannot be empty');
@@ -17,7 +31,7 @@ const LayerPanel = ({ projectId, layers = [], setLayers, activeLayerId, setActiv
     }
 
     try {
-      const updatedLayers = layers.map(layer => 
+      const updatedLayers = layers.map(layer =>
         layer.id === layerId ? { ...layer, name: newName.trim() } : layer
       );
 
@@ -45,7 +59,7 @@ const LayerPanel = ({ projectId, layers = [], setLayers, activeLayerId, setActiv
 
     try {
       const newLayers = layers.filter(layer => layer.id !== layerToDelete);
-      
+
       const projectRef = doc(db, 'projects', projectId);
       await updateDoc(projectRef, {
         layers: newLayers,
@@ -78,7 +92,7 @@ const LayerPanel = ({ projectId, layers = [], setLayers, activeLayerId, setActiv
           <FiPlus className="w-4 h-4" />
         </button>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto">
         {layers.map((layer) => (
           <div

@@ -31,6 +31,7 @@ const ToolBar = ({
   userRole = 'viewer'
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  console.log('ToolBar rendering with activeTool:', activeTool); // Debug log
 
   // Keyboard shortcuts
   useHotkeys('v', () => setActiveTool('select'), { preventDefault: true });
@@ -75,26 +76,6 @@ const ToolBar = ({
     }
   };
 
-  // Auto-save setup
-  React.useEffect(() => {
-    const autoSaveInterval = setInterval(async () => {
-      if (layers.length > 0 && userRole !== 'viewer') {
-        try {
-          const projectRef = doc(db, 'projects', projectId);
-          await updateDoc(projectRef, {
-            layers: layers,
-            lastModified: serverTimestamp()
-          });
-          toast.success('Auto-saved changes', { duration: 2000 });
-        } catch (error) {
-          console.error('Auto-save error:', error);
-        }
-      }
-    }, 300000); // Auto-save every 5 minutes
-
-    return () => clearInterval(autoSaveInterval);
-  }, [layers, projectId, userRole]);
-
   return (
     <div className={`relative bg-slate-800 border-r border-slate-700 flex flex-col justify-between py-3 transition-all duration-300 ${isCollapsed ? 'w-2' : 'w-12'}`}>
       {/* Collapse Toggle Button */}
@@ -108,7 +89,7 @@ const ToolBar = ({
       {!isCollapsed && (
         <>
           {/* Tools */}
-          <div className="space-y-1 px-1">
+          <div className="space-y-1.5 px-1.5">
             {tools.map(tool => (
               <button
                 key={tool.id}
@@ -125,7 +106,7 @@ const ToolBar = ({
           </div>
 
           {/* Save and Zoom Controls */}
-          <div className="space-y-1 px-1 border-t border-slate-700 pt-3">
+          <div className="space-y-1.5 px-1.5 mt-4 pt-4 border-t border-slate-700">
             <button
               onClick={handleSave}
               className="w-full aspect-square rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700"

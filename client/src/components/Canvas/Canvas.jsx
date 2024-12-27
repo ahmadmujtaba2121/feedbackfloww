@@ -7,14 +7,13 @@ import { doc, updateDoc, serverTimestamp, deleteDoc, setDoc, onSnapshot, arrayUn
 import { useNotification } from '../../contexts/NotificationContext';
 import TextEditor from './TextEditor';
 import CommentPin from './CommentPin';
-import { FiUpload, FiCheck, FiX, FiTrash2, FiMove, FiCornerRightDown, FiAlertCircle } from 'react-icons/fi';
+import { FiUpload, FiCheck, FiX, FiTrash2, FiMove, FiCornerRightDown, FiAlertCircle, FiMinus, FiPlus } from 'react-icons/fi';
 import ReviewPanel from './ReviewPanel';
 import ReviewList from './ReviewList';
 import { uploadProjectFile } from '../../services/userService';
 import Modal from '../Modal';
 import { debounce } from 'lodash';
 import DraggableFile from './DraggableFile';
-import PDFObject from './PDFObject';
 import CodeBlock from './CodeBlock';
 import { PremiumFeature } from '../PremiumFeature';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -391,6 +390,13 @@ const Canvas = ({ layers = [], setLayers, activeTool, activeLayerId, scale = 1, 
 
   const handleFileUpload = async (file) => {
     try {
+      // Check file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/svg+xml'];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error('Unsupported file type. Please upload JPG, PNG, or SVG files.');
+        return null;
+      }
+
       const storageRef = ref(storage, `projects/${projectId}/${Date.now()}-${file.name}`);
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
@@ -421,8 +427,17 @@ const Canvas = ({ layers = [], setLayers, activeTool, activeLayerId, scale = 1, 
   const handleDrop = async (e) => {
     e.preventDefault();
     setIsDraggingFile(false);
-    const files = e.dataTransfer.files;
-    await handleFileUpload(files);
+
+    const files = Array.from(e.dataTransfer.files);
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/svg+xml'];
+
+    for (const file of files) {
+      if (!allowedTypes.includes(file.type)) {
+        toast.error(`${file.name}: Unsupported file type. Please upload JPG, PNG, or SVG files.`);
+        continue;
+      }
+      await handleFileUpload(file);
+    }
   };
 
   // Add file input for manual upload
@@ -537,6 +552,29 @@ const Canvas = ({ layers = [], setLayers, activeTool, activeLayerId, scale = 1, 
       setScale(prevScale => Math.max(prevScale - 0.1, 0.1));
     }
   };
+
+  const handleZoomReset = () => {
+    setScale(1);
+  };
+
+  const handleWheel = useCallback((e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY * -0.01;
+      setScale(prevScale => {
+        const newScale = Math.max(0.1, Math.min(3, prevScale + delta));
+        return newScale;
+      });
+    }
+  }, [setScale]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('wheel', handleWheel, { passive: false });
+      return () => container.removeEventListener('wheel', handleWheel);
+    }
+  }, [handleWheel]);
 
   const handleCommentComplete = (commentData) => {
     if (!commentData || !activeLayerId || !commentInput) {
@@ -893,7 +931,28 @@ const Canvas = ({ layers = [], setLayers, activeTool, activeLayerId, scale = 1, 
     <div className="relative w-full h-full overflow-hidden bg-slate-900">
       <div className="flex h-screen">
         <div className="flex-1 relative">
-          {/* Status buttons */}
+          {/* Zoom Display */}
+          <div className="absolute top-4 left-4 z-50">
+            <div className="flex items-center justify-center px-3 py-2 bg-slate-800 text-white rounded-lg">
+              {Math.round(scale * 100)}%
+            </div>
+          </div>
+
+          {/* Review List */}
+          <ReviewList
+            reviews={reviews}
+            onSelectReview={handleSelectReview}
+            selectedReview={selectedReview}
+            projectId={projectId}
+            currentUser={currentUser}
+            isReviewer={isReviewer}
+            isOwner={isOwner}
+            onAddReview={handleAddReview}
+            layers={layers}
+            setLayers={setLayers}
+          />
+
+          {/* Status buttons for reviewers */}
           {isReviewer && !isOwner && (
             <div className="absolute top-4 right-4 z-[100] flex gap-2">
               <button
@@ -931,27 +990,6 @@ const Canvas = ({ layers = [], setLayers, activeTool, activeLayerId, scale = 1, 
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            {/* Zoom Display */}
-            <div className="absolute top-4 left-4 z-50">
-              <div className="flex items-center justify-center px-3 py-2 bg-slate-800 text-white rounded-lg">
-                {Math.round(scale * 100)}%
-              </div>
-            </div>
-
-            {/* Review List */}
-            <ReviewList
-              reviews={reviews}
-              onSelectReview={handleSelectReview}
-              selectedReview={selectedReview}
-              projectId={projectId}
-              currentUser={currentUser}
-              isReviewer={isReviewer}
-              isOwner={isOwner}
-              onAddReview={handleAddReview}
-              layers={layers}
-              setLayers={setLayers}
-            />
-
             <div className="flex">
               <div
                 className={`relative mx-auto bg-slate-800 rounded-lg shadow-2xl ${isDraggingFile ? 'ring-2 ring-violet-500' : ''}`}

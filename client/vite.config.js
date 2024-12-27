@@ -29,7 +29,6 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 5000,
       assetsDir: 'assets',
       rollupOptions: {
-        external: ['canvas'],
         output: {
           manualChunks: {
             vendor: [
@@ -93,8 +92,7 @@ export default defineConfig(({ mode }) => {
         'lodash',
         'roughjs',
         'canvas-confetti'
-      ],
-      exclude: ['canvas', 'pdfjs-dist']
+      ]
     },
     publicDir: 'public',
     base: '/',
