@@ -88,6 +88,10 @@ export const validateInvite = async (projectId: string, inviteId: string): Promi
     throw new Error('Invalid or expired invite link');
   }
 
+  if (invite.used) {
+    throw new Error('This invite link has already been used');
+  }
+
   return invite;
 };
 

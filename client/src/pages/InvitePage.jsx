@@ -25,9 +25,20 @@ const InvitePage = () => {
           return;
         }
 
-        // Accept the invite
+        // First validate the invite
+        const invite = await validateInvite(projectId, inviteId);
+
+        if (!invite) {
+          throw new Error('Invalid or expired invite link');
+        }
+
+        // Accept the invite and get redirect URL
         const { redirect } = await acceptInvite(projectId, inviteId, currentUser.email);
-        toast.success('Successfully joined the project!');
+
+        // Show success message with proper role
+        toast.success(`Successfully joined the project as ${invite.role || 'viewer'}!`);
+
+        // Navigate to the project
         navigate(redirect, { replace: true });
       } catch (err) {
         console.error('Error processing invite:', err);
@@ -42,7 +53,7 @@ const InvitePage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <LoadingSpinner />
       </div>
     );
@@ -50,7 +61,7 @@ const InvitePage = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="bg-red-500/10 text-red-400 p-4 rounded-lg border border-red-500/20">
           {error}
         </div>
