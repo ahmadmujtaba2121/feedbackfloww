@@ -3,6 +3,7 @@ import { FiMessageCircle, FiX, FiSend } from 'react-icons/fi';
 import { doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/firebase';
 import { toast } from 'react-hot-toast';
+import { formatTimestamp } from '../../../utils/dateUtils';
 
 const VersionComments = ({ projectId, version, currentUser }) => {
   const [comments, setComments] = useState([]);
@@ -16,7 +17,7 @@ const VersionComments = ({ projectId, version, currentUser }) => {
       try {
         const docRef = doc(db, 'projects', projectId);
         const docSnap = await getDoc(docRef);
-        
+
         if (docSnap.exists()) {
           const data = docSnap.data();
           const versionComments = data.versionComments?.[version.id] || [];
@@ -39,7 +40,7 @@ const VersionComments = ({ projectId, version, currentUser }) => {
     try {
       const docRef = doc(db, 'projects', projectId);
       const docSnap = await getDoc(docRef);
-      
+
       if (!docSnap.exists()) {
         toast.error('Project not found');
         return;
@@ -81,7 +82,7 @@ const VersionComments = ({ projectId, version, currentUser }) => {
     try {
       const docRef = doc(db, 'projects', projectId);
       const docSnap = await getDoc(docRef);
-      
+
       if (!docSnap.exists()) {
         toast.error('Project not found');
         return;
@@ -104,14 +105,6 @@ const VersionComments = ({ projectId, version, currentUser }) => {
     } catch (error) {
       console.error('Error deleting comment:', error);
       toast.error('Failed to delete comment');
-    }
-  };
-
-  const formatTimestamp = (timestamp) => {
-    try {
-      return new Date(timestamp).toLocaleString();
-    } catch (error) {
-      return 'Invalid date';
     }
   };
 
@@ -198,11 +191,10 @@ const VersionComments = ({ projectId, version, currentUser }) => {
           <button
             onClick={addComment}
             disabled={!newComment.trim()}
-            className={`p-2 rounded-lg ${
-              newComment.trim()
-                ? 'bg-violet-600 text-white hover:bg-violet-700'
-                : 'bg-slate-700 text-slate-400 cursor-not-allowed'
-            }`}
+            className={`p-2 rounded-lg ${newComment.trim()
+              ? 'bg-violet-600 text-white hover:bg-violet-700'
+              : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+              }`}
           >
             <FiSend className="w-4 h-4" />
           </button>

@@ -3,6 +3,7 @@ import { FiClock, FiSave, FiRotateCcw, FiX, FiTrash2, FiTag, FiFilter } from 're
 import { doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase/firebase';
 import { toast } from 'react-hot-toast';
+import { formatTimestamp } from '../../../utils/dateUtils';
 
 // Predefined tags with colors
 const PREDEFINED_TAGS = {
@@ -28,7 +29,7 @@ const VersionDescriptionModal = ({ onSave, onClose }) => {
   };
 
   const toggleTag = (tag) => {
-    setSelectedTags(prev => 
+    setSelectedTags(prev =>
       prev.includes(tag)
         ? prev.filter(t => t !== tag)
         : [...prev, tag]
@@ -95,9 +96,8 @@ const VersionDescriptionModal = ({ onSave, onClose }) => {
                     key={tag}
                     type="button"
                     onClick={() => toggleTag(tag)}
-                    className={`px-2 py-1 rounded text-sm flex items-center space-x-1 ${
-                      selectedTags.includes(tag) ? color + ' text-white' : 'hover:bg-slate-600 ' + textColor
-                    }`}
+                    className={`px-2 py-1 rounded text-sm flex items-center space-x-1 ${selectedTags.includes(tag) ? color + ' text-white' : 'hover:bg-slate-600 ' + textColor
+                      }`}
                   >
                     <FiTag className="w-3 h-3" />
                     <span>{tag}</span>
@@ -178,7 +178,7 @@ const VersionPanel = ({ projectId, layers, setLayers }) => {
       try {
         const docRef = doc(db, 'projects', projectId);
         const docSnap = await getDoc(docRef);
-        
+
         if (docSnap.exists()) {
           const data = docSnap.data();
           setVersions(data.versions || []);
@@ -210,7 +210,7 @@ const VersionPanel = ({ projectId, layers, setLayers }) => {
     try {
       const docRef = doc(db, 'projects', projectId);
       const docSnap = await getDoc(docRef);
-      
+
       if (!docSnap.exists()) {
         toast.error('Project not found');
         return;
@@ -225,7 +225,7 @@ const VersionPanel = ({ projectId, layers, setLayers }) => {
       };
 
       const updatedVersions = [...versions, newVersion];
-      
+
       await updateDoc(docRef, {
         versions: updatedVersions,
         lastModified: serverTimestamp()
@@ -248,14 +248,14 @@ const VersionPanel = ({ projectId, layers, setLayers }) => {
     try {
       const docRef = doc(db, 'projects', projectId);
       const docSnap = await getDoc(docRef);
-      
+
       if (!docSnap.exists()) {
         toast.error('Project not found');
         return;
       }
 
       const updatedVersions = versions.filter(v => v.id !== version.id);
-      
+
       await updateDoc(docRef, {
         versions: updatedVersions,
         lastModified: serverTimestamp()
@@ -281,37 +281,23 @@ const VersionPanel = ({ projectId, layers, setLayers }) => {
     try {
       const docRef = doc(db, 'projects', projectId);
       const docSnap = await getDoc(docRef);
-      
+
       if (!docSnap.exists()) {
         toast.error('Project not found');
         return;
       }
 
       setLayers(JSON.parse(JSON.stringify(version.layers)));
-      
+
       await updateDoc(docRef, {
         layers: version.layers,
         lastModified: serverTimestamp()
       });
-      
+
       toast.success('Version restored successfully');
     } catch (error) {
       console.error('Error restoring version:', error);
       toast.error('Failed to restore version: ' + error.message);
-    }
-  };
-
-  const formatTimestamp = (timestamp) => {
-    try {
-      if (typeof timestamp === 'string') {
-        return new Date(timestamp).toLocaleString();
-      } else if (timestamp?.toDate) {
-        return timestamp.toDate().toLocaleString();
-      }
-      return 'Unknown date';
-    } catch (error) {
-      console.error('Error formatting timestamp:', error);
-      return 'Invalid date';
     }
   };
 
@@ -329,9 +315,8 @@ const VersionPanel = ({ projectId, layers, setLayers }) => {
             <div className="relative">
               <button
                 onClick={() => setShowTagFilter(!showTagFilter)}
-                className={`p-1 hover:bg-slate-700 rounded transition-colors ${
-                  filterTag ? 'text-violet-500' : 'text-slate-400'
-                }`}
+                className={`p-1 hover:bg-slate-700 rounded transition-colors ${filterTag ? 'text-violet-500' : 'text-slate-400'
+                  }`}
                 title="Filter by tag"
               >
                 <FiFilter className="w-5 h-5" />
@@ -392,9 +377,8 @@ const VersionPanel = ({ projectId, layers, setLayers }) => {
               {filteredVersions.map((version) => (
                 <div
                   key={version.id}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                    selectedVersion?.id === version.id ? 'bg-slate-700' : 'hover:bg-slate-700/50'
-                  }`}
+                  className={`p-3 rounded-lg cursor-pointer transition-colors ${selectedVersion?.id === version.id ? 'bg-slate-700' : 'hover:bg-slate-700/50'
+                    }`}
                   onClick={() => setSelectedVersion(version)}
                 >
                   <div className="flex items-center justify-between mb-2">

@@ -12,6 +12,7 @@ import { serverTimestamp } from 'firebase/firestore';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
 import { useParams } from 'react-router-dom';
+import { formatTimestamp } from '../utils/dateUtils';
 
 const LoadingSkeleton = () => (
   <div className="flex space-x-4 min-w-max p-4">
@@ -98,18 +99,6 @@ const BoardColumn = React.memo(({ status, config, tasks, project, currentUser })
 });
 
 const MemoizedTaskCard = React.memo(TaskCard);
-
-const formatTimestamp = (timestamp) => {
-  if (!timestamp) return 'Never';
-  if (timestamp.toDate) {
-    return timestamp.toDate().toLocaleString();
-  }
-  if (typeof timestamp === 'string') {
-    const date = new Date(timestamp);
-    return !isNaN(date.getTime()) ? date.toLocaleString() : 'Never';
-  }
-  return 'Never';
-};
 
 const KanbanBoard = () => {
   const { projectId } = useParams();
