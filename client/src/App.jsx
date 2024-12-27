@@ -73,7 +73,7 @@ const AppContent = () => {
           <Route path="/project/:projectId/ai-assistant" element={<PrivateRoute><AIAssistant /></PrivateRoute>} />
 
           {/* Invite routes */}
-          <Route path="/invite/:projectId/:inviteId" element={<PrivateRoute><InvitePage /></PrivateRoute>} />
+          <Route path="/invite/:projectId/:inviteId" element={<InvitePage />} />
           <Route path="/invite/:projectId/:inviteId/canvas" element={<PrivateRoute><CanvasPage isInviteLink={true} /></PrivateRoute>} />
           <Route path="/invite/:projectId/:inviteId/kanban" element={<PrivateRoute><KanbanPage isInviteLink={true} /></PrivateRoute>} />
           <Route path="/invite/:projectId/:inviteId/calendar" element={<PrivateRoute><CalendarPage isInviteLink={true} /></PrivateRoute>} />
