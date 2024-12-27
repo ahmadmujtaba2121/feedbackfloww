@@ -1,25 +1,58 @@
 import { collection, doc, setDoc, serverTimestamp, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
+import { v4 as uuidv4 } from 'uuid';
 
 export const createProjectInvite = async (projectId, creatorEmail, type = 'view') => {
   try {
-    const inviteRef = doc(collection(db, 'invites'));
-    const inviteId = inviteRef.id;
+    const projectRef = doc(db, 'projects', projectId);
+    const projectDoc = await getDoc(projectRef);
 
-    await setDoc(inviteRef, {
+    if (!projectDoc.exists()) {
+      throw new Error('Project not found');
+    }
+
+    const invite = {
+      id: uuidv4(),
       projectId,
       creatorEmail,
-      type,
-      createdAt: serverTimestamp(),
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      status: 'active',
-      usedBy: []
-    });
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      used: false,
+      status: 'active'
+    };
 
-    const inviteLink = `${window.location.origin}/invite/${projectId}/${inviteId}`;
+    // Add invite to the appropriate array based on type
+    if (type === 'view') {
+      await updateDoc(projectRef, {
+        viewerLinks: arrayUnion({
+          ...invite,
+          role: 'viewer'
+        }),
+        activityLog: arrayUnion({
+          type: 'invite_created',
+          user: creatorEmail,
+          inviteType: 'viewer',
+          timestamp: new Date().toISOString()
+        })
+      });
+    } else {
+      await updateDoc(projectRef, {
+        editorLinks: arrayUnion({
+          ...invite,
+          role: 'editor'
+        }),
+        activityLog: arrayUnion({
+          type: 'invite_created',
+          user: creatorEmail,
+          inviteType: 'editor',
+          timestamp: new Date().toISOString()
+        })
+      });
+    }
 
+    const inviteLink = `${window.location.origin}/invite/${projectId}/${invite.id}`;
     return {
-      inviteId,
+      inviteId: invite.id,
       inviteLink
     };
   } catch (error) {
@@ -30,29 +63,44 @@ export const createProjectInvite = async (projectId, creatorEmail, type = 'view'
 
 export const validateInvite = async (inviteId) => {
   try {
-    const inviteRef = doc(db, 'invites', inviteId);
-    const inviteDoc = await getDoc(inviteRef);
+    const projectsRef = collection(db, 'projects');
+    const projectsSnapshot = await getDocs(
+      query(projectsRef,
+        where('viewerLinks', 'array-contains', { id: inviteId }),
+        where('editorLinks', 'array-contains', { id: inviteId })
+      )
+    );
 
-    if (!inviteDoc.exists()) {
+    if (projectsSnapshot.empty) {
       throw new Error('Invite not found');
     }
 
-    const inviteData = inviteDoc.data();
+    const projectDoc = projectsSnapshot.docs[0];
+    const projectData = projectDoc.data();
+
+    // Find the invite in either viewerLinks or editorLinks
+    const invite = [...(projectData.viewerLinks || []), ...(projectData.editorLinks || [])]
+      .find(link => link.id === inviteId);
+
+    if (!invite) {
+      throw new Error('Invite not found');
+    }
+
     const now = new Date();
-    const expiresAt = inviteData.expiresAt.toDate();
+    const expiresAt = new Date(invite.expiresAt);
 
     if (now > expiresAt) {
       throw new Error('Invite has expired');
     }
 
-    if (inviteData.status !== 'active') {
+    if (invite.status !== 'active') {
       throw new Error('Invite is no longer active');
     }
 
     return {
       isValid: true,
-      type: inviteData.type,
-      projectId: inviteData.projectId
+      type: invite.role === 'editor' ? 'team' : 'view',
+      projectId: projectDoc.id
     };
   } catch (error) {
     console.error('Error validating invite:', error);
@@ -62,27 +110,6 @@ export const validateInvite = async (inviteId) => {
 
 export const acceptInvite = async (projectId, inviteId, userEmail) => {
   try {
-    const inviteRef = doc(db, 'invites', inviteId);
-    const inviteDoc = await getDoc(inviteRef);
-
-    if (!inviteDoc.exists()) {
-      throw new Error('Invite not found');
-    }
-
-    const inviteData = inviteDoc.data();
-
-    // Check if invite is expired
-    const now = new Date();
-    const expiresAt = inviteData.expiresAt.toDate();
-    if (now > expiresAt) {
-      throw new Error('Invite has expired');
-    }
-
-    // Check if invite is still active
-    if (inviteData.status !== 'active') {
-      throw new Error('Invite is no longer active');
-    }
-
     const projectRef = doc(db, 'projects', projectId);
     const projectDoc = await getDoc(projectRef);
 
@@ -90,15 +117,40 @@ export const acceptInvite = async (projectId, inviteId, userEmail) => {
       throw new Error('Project not found');
     }
 
-    // Update invite document to track usage
-    await updateDoc(inviteRef, {
-      usedBy: arrayUnion(userEmail),
-      lastUsedAt: serverTimestamp()
-    });
+    const projectData = projectDoc.data();
 
-    // Add user based on invite type
-    if (inviteData.type === 'team') {
+    // Find the invite in either viewerLinks or editorLinks
+    const invite = [...(projectData.viewerLinks || []), ...(projectData.editorLinks || [])]
+      .find(link => link.id === inviteId);
+
+    if (!invite) {
+      throw new Error('Invite not found');
+    }
+
+    // Check if invite is expired
+    const now = new Date();
+    const expiresAt = new Date(invite.expiresAt);
+    if (now > expiresAt) {
+      throw new Error('Invite has expired');
+    }
+
+    // Check if invite is still active
+    if (invite.status !== 'active') {
+      throw new Error('Invite is no longer active');
+    }
+
+    // Update invite to mark it as used
+    const updatedInvite = {
+      ...invite,
+      used: true,
+      usedBy: userEmail,
+      lastUsedAt: new Date().toISOString()
+    };
+
+    // Add user based on invite role
+    if (invite.role === 'editor') {
       await updateDoc(projectRef, {
+        editorLinks: arrayUnion(updatedInvite),
         [`editors.${userEmail}`]: {
           role: 'editor',
           joinedAt: serverTimestamp(),
@@ -113,6 +165,7 @@ export const acceptInvite = async (projectId, inviteId, userEmail) => {
       });
     } else {
       await updateDoc(projectRef, {
+        viewerLinks: arrayUnion(updatedInvite),
         [`viewers.${userEmail}`]: {
           role: 'viewer',
           joinedAt: serverTimestamp(),
@@ -129,7 +182,7 @@ export const acceptInvite = async (projectId, inviteId, userEmail) => {
 
     return {
       redirect: `/project/${projectId}`,
-      type: inviteData.type
+      type: invite.role === 'editor' ? 'team' : 'view'
     };
   } catch (error) {
     console.error('Error accepting invite:', error);
