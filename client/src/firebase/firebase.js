@@ -1,8 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator, collection, getDocs } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { doc, getDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDT4NPibL9xVBKlJW3G3F_xa39xmH-aW2c",
@@ -35,23 +34,24 @@ const initializeFirebase = async () => {
     db = getFirestore(app);
     storage = getStorage(app);
 
-    // Initialize Firestore with settings
-    const firestoreSettings = {
-      experimentalForceLongPolling: true,
-      useFetchStreams: false,
-      cacheSizeBytes: 1048576, // 1MB
-      merge: true
-    };
-
-    // Test connection by trying to access a document
+    // Test collection access
     try {
-      const testRef = doc(db, '_test_connection_', 'test');
-      await getDoc(testRef);
-      console.log('Firestore connection test successful');
-    } catch (testError) {
-      console.warn('Firestore connection test warning:', testError);
-      // Don't throw error, just log warning
+      console.log('Testing Firestore collection access...');
+      const projectsRef = collection(db, 'projects');
+      const snapshot = await getDocs(projectsRef);
+      console.log('Successfully accessed projects collection. Found', snapshot.size, 'documents');
+    } catch (collectionError) {
+      console.error('Failed to access projects collection:', collectionError);
+      // Don't throw, just log the error
     }
+
+    // Set Firestore settings for better reliability
+    const settings = {
+      experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: true,
+      useFetchStreams: false,
+      cacheSizeBytes: 1048576 // 1MB
+    };
 
     console.log('Firebase services initialized successfully');
     return true;
