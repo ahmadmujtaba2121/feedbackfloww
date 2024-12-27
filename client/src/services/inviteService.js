@@ -70,12 +70,31 @@ export const acceptInvite = async (projectId, inviteId, userEmail) => {
     }
 
     const inviteData = inviteDoc.data();
+
+    // Check if invite is expired
+    const now = new Date();
+    const expiresAt = inviteData.expiresAt.toDate();
+    if (now > expiresAt) {
+      throw new Error('Invite has expired');
+    }
+
+    // Check if invite is still active
+    if (inviteData.status !== 'active') {
+      throw new Error('Invite is no longer active');
+    }
+
     const projectRef = doc(db, 'projects', projectId);
     const projectDoc = await getDoc(projectRef);
 
     if (!projectDoc.exists()) {
       throw new Error('Project not found');
     }
+
+    // Update invite document to track usage
+    await updateDoc(inviteRef, {
+      usedBy: arrayUnion(userEmail),
+      lastUsedAt: serverTimestamp()
+    });
 
     // Add user based on invite type
     if (inviteData.type === 'team') {
@@ -98,19 +117,19 @@ export const acceptInvite = async (projectId, inviteId, userEmail) => {
           role: 'viewer',
           joinedAt: serverTimestamp(),
           inviteId: inviteId
-        }
+        },
+        activityLog: arrayUnion({
+          type: 'viewer_joined',
+          user: userEmail,
+          role: 'viewer',
+          timestamp: new Date().toISOString()
+        })
       });
     }
 
-    // Update invite document
-    await updateDoc(inviteRef, {
-      usedBy: arrayUnion(userEmail)
-    });
-
     return {
-      success: true,
-      type: inviteData.type,
-      redirect: `/project/${projectId}`
+      redirect: `/project/${projectId}`,
+      type: inviteData.type
     };
   } catch (error) {
     console.error('Error accepting invite:', error);

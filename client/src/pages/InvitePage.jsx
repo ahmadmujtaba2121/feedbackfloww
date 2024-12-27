@@ -21,28 +21,30 @@ const InvitePage = () => {
 
         // If user is not logged in, redirect to sign in
         if (!currentUser) {
-          navigate(`/signin?redirect=/invite/${projectId}/${inviteId}`);
+          const returnUrl = encodeURIComponent(`/invite/${projectId}/${inviteId}`);
+          navigate(`/signin?redirect=${returnUrl}`);
           return;
         }
 
         // First validate the invite
-        const invite = await validateInvite(projectId, inviteId);
-
-        if (!invite) {
-          throw new Error('Invalid or expired invite link');
+        const validationResult = await validateInvite(inviteId);
+        if (!validationResult.isValid) {
+          throw new Error('Invalid or expired invite');
         }
 
-        // Accept the invite and get redirect URL
-        const { redirect } = await acceptInvite(projectId, inviteId, currentUser.email);
+        // Check if the project ID matches
+        if (validationResult.projectId !== projectId) {
+          throw new Error('Invalid project ID');
+        }
 
-        // Show success message with proper role
-        toast.success(`Successfully joined the project as ${invite.role || 'viewer'}!`);
-
-        // Navigate to the project
+        // Accept the invite
+        const { redirect, type } = await acceptInvite(projectId, inviteId, currentUser.email);
+        toast.success(`Successfully joined the project as ${type === 'team' ? 'a team member' : 'a viewer'}!`);
         navigate(redirect, { replace: true });
       } catch (err) {
         console.error('Error processing invite:', err);
         setError(err.message || 'Failed to process invite');
+        toast.error(err.message || 'Failed to process invite');
       } finally {
         setLoading(false);
       }
@@ -53,7 +55,7 @@ const InvitePage = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
         <LoadingSpinner />
       </div>
     );
@@ -61,10 +63,16 @@ const InvitePage = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-[#080C14] flex flex-col items-center justify-center gap-4">
         <div className="bg-red-500/10 text-red-400 p-4 rounded-lg border border-red-500/20">
           {error}
         </div>
+        <button
+          onClick={() => navigate('/')}
+          className="px-4 py-2 bg-[#1B2B44] text-[#E5E9F0] rounded-lg hover:bg-[#2B3B54] transition-colors"
+        >
+          Return to Home
+        </button>
       </div>
     );
   }
@@ -72,4 +80,4 @@ const InvitePage = () => {
   return null;
 };
 
-export default InvitePage; 
+export default InvitePage;  

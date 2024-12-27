@@ -31,10 +31,10 @@ const InvitePage = () => {
         // Validate and accept the invite
         const invite = await validateInvite(projectId, inviteId);
         const { redirect } = await acceptInvite(projectId, inviteId, currentUser.email);
-        
+
         // Show success message with proper role
         toast.success(`You've been added as a ${invite.role || 'viewer'}`);
-        
+
         // Navigate to the canvas page
         navigate(redirect, { replace: true });
       } catch (err) {
