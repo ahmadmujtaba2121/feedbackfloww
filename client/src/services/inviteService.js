@@ -51,30 +51,57 @@ export const validateInvite = async (inviteId, projectId) => {
   try {
     console.log('Starting invite validation:', { projectId, inviteId }); // Debug log
 
+    // Check if Firestore is initialized
+    if (!db) {
+      console.error('Firestore not initialized');
+      throw new Error('Database connection error');
+    }
+
     // First try direct project lookup
     const projectRef = doc(db, 'projects', projectId);
-    let projectDoc = await getDoc(projectRef);
+    console.log('Attempting to fetch project:', projectId);
 
-    console.log('Project document exists:', projectDoc.exists()); // Debug log
+    let projectDoc;
+    try {
+      projectDoc = await getDoc(projectRef);
+      console.log('Project fetch result:', {
+        exists: projectDoc.exists(),
+        id: projectDoc.id,
+        path: projectDoc.ref.path
+      });
+    } catch (fetchError) {
+      console.error('Error fetching project:', fetchError);
+      throw new Error('Failed to access project data');
+    }
 
     if (!projectDoc.exists()) {
       console.log('Project not found by direct ID, searching all projects...'); // Debug log
 
-      // If direct lookup fails, search all projects
-      const projectsRef = collection(db, 'projects');
-      const querySnapshot = await getDocs(projectsRef);
+      try {
+        // If direct lookup fails, search all projects
+        const projectsRef = collection(db, 'projects');
+        const querySnapshot = await getDocs(projectsRef);
 
-      console.log('Total projects found:', querySnapshot.size); // Debug log
+        console.log('Total projects found:', querySnapshot.size); // Debug log
 
-      for (const doc of querySnapshot.docs) {
-        const data = doc.data();
-        console.log('Checking project:', doc.id); // Debug log
+        for (const doc of querySnapshot.docs) {
+          const data = doc.data();
+          console.log('Checking project:', {
+            id: doc.id,
+            hasInvites: !!data.invites,
+            inviteCount: data.invites?.length || 0
+          });
 
-        if (data.invites && data.invites.some(invite => invite.id === inviteId)) {
-          console.log('Found invite in project:', doc.id); // Debug log
-          projectDoc = doc;
-          break;
+          const foundInvite = data.invites?.find(invite => invite.id === inviteId);
+          if (foundInvite) {
+            console.log('Found invite in project:', doc.id);
+            projectDoc = doc;
+            break;
+          }
         }
+      } catch (searchError) {
+        console.error('Error searching projects:', searchError);
+        throw new Error('Failed to search for invite');
       }
     }
 
@@ -85,14 +112,15 @@ export const validateInvite = async (inviteId, projectId) => {
     const projectData = projectDoc.data();
     console.log('Project data:', {
       id: projectDoc.id,
-      invitesCount: projectData.invites?.length || 0
-    }); // Debug log
+      invitesCount: projectData.invites?.length || 0,
+      hasInvites: !!projectData.invites
+    });
 
     // Find the invite in the project's invites array
     const invite = (projectData.invites || []).find(link => link.id === inviteId);
 
     if (!invite) {
-      console.log('Available invites:', projectData.invites); // Debug log
+      console.log('Available invites:', projectData.invites?.map(i => ({ id: i.id, role: i.role })));
       throw new Error('Invite not found');
     }
 
@@ -100,8 +128,9 @@ export const validateInvite = async (inviteId, projectId) => {
       id: invite.id,
       projectId: invite.projectId,
       role: invite.role,
-      status: invite.status
-    }); // Debug log
+      status: invite.status,
+      createdAt: invite.createdAt
+    });
 
     const now = new Date();
     const expiresAt = new Date(invite.expiresAt);
@@ -115,18 +144,23 @@ export const validateInvite = async (inviteId, projectId) => {
     }
 
     // Return the actual project ID from where we found the invite
-    return {
+    const result = {
       isValid: true,
       type: invite.role === 'editor' ? 'team' : 'view',
       projectId: projectDoc.id
     };
+
+    console.log('Validation successful:', result);
+    return result;
+
   } catch (error) {
     console.error('Validation error details:', {
       error: error.message,
       code: error.code,
+      stack: error.stack,
       projectId,
       inviteId
-    }); // Enhanced error logging
+    });
     throw error;
   }
 };
