@@ -1,4 +1,4 @@
-import { collection, doc, setDoc, serverTimestamp, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, getDoc, updateDoc, arrayUnion, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
 import { v4 as uuidv4 } from 'uuid';
 
