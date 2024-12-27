@@ -2,6 +2,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { doc, getDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDT4NPibL9xVBKlJW3G3F_xa39xmH-aW2c",
@@ -20,7 +21,7 @@ let db;
 let auth;
 let storage;
 
-const initializeFirebase = () => {
+const initializeFirebase = async () => {
   try {
     if (!getApps().length) {
       console.log('Initializing new Firebase app...');
@@ -34,11 +35,23 @@ const initializeFirebase = () => {
     db = getFirestore(app);
     storage = getStorage(app);
 
-    // Set Firestore settings
-    const settings = {
-      experimentalForceLongPolling: true, // This may help with connection issues
+    // Initialize Firestore with settings
+    const firestoreSettings = {
+      experimentalForceLongPolling: true,
+      useFetchStreams: false,
+      cacheSizeBytes: 1048576, // 1MB
       merge: true
     };
+
+    // Test connection by trying to access a document
+    try {
+      const testRef = doc(db, '_test_connection_', 'test');
+      await getDoc(testRef);
+      console.log('Firestore connection test successful');
+    } catch (testError) {
+      console.warn('Firestore connection test warning:', testError);
+      // Don't throw error, just log warning
+    }
 
     console.log('Firebase services initialized successfully');
     return true;
@@ -52,14 +65,25 @@ const initializeFirebase = () => {
   }
 };
 
-// Initialize Firebase
-const isInitialized = initializeFirebase();
+// Initialize Firebase with retries
+const initializeWithRetry = async (retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    const success = await initializeFirebase();
+    if (success) {
+      return true;
+    }
+    console.log(`Initialization attempt ${i + 1} failed, retrying...`);
+    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+  }
+  return false;
+};
 
-if (!isInitialized) {
-  console.error('Failed to initialize Firebase, retrying...');
-  // Retry initialization
-  setTimeout(initializeFirebase, 1000);
-}
+// Initialize immediately
+initializeWithRetry().then(success => {
+  if (!success) {
+    console.error('Failed to initialize Firebase after retries');
+  }
+});
 
 export { app, auth, db, storage };
 export default app;

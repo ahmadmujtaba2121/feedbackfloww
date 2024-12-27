@@ -48,6 +48,32 @@ export const createProjectInvite = async (projectId, creatorEmail, type = 'view'
 };
 
 export const validateInvite = async (inviteId, projectId) => {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000; // 1 second
+
+  const tryFetchProject = async (attempt = 1) => {
+    try {
+      const projectRef = doc(db, 'projects', projectId);
+      const projectDoc = await getDoc(projectRef);
+
+      console.log('Project fetch attempt', attempt, 'result:', {
+        exists: projectDoc.exists(),
+        id: projectDoc.id,
+        path: projectRef.path
+      });
+
+      return projectDoc;
+    } catch (error) {
+      console.error(`Fetch attempt ${attempt} failed:`, error);
+      if (attempt < MAX_RETRIES) {
+        console.log(`Retrying in ${RETRY_DELAY}ms...`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        return tryFetchProject(attempt + 1);
+      }
+      throw error;
+    }
+  };
+
   try {
     console.log('Starting invite validation:', { projectId, inviteId });
 
@@ -57,44 +83,11 @@ export const validateInvite = async (inviteId, projectId) => {
       throw new Error('Database connection error');
     }
 
-    // First try direct project lookup
-    const projectRef = doc(db, 'projects', projectId);
-    console.log('Attempting to fetch project:', projectId);
-
-    let projectDoc;
-    try {
-      projectDoc = await getDoc(projectRef);
-      console.log('Project fetch result:', {
-        exists: projectDoc.exists(),
-        id: projectDoc.id,
-        path: projectRef.path
-      });
-    } catch (fetchError) {
-      console.error('Error fetching project:', {
-        error: fetchError.message,
-        code: fetchError.code,
-        projectId,
-        path: projectRef.path
-      });
-
-      // If it's a connection error, retry once
-      if (fetchError.code === 'failed-precondition' || fetchError.code === 'unavailable') {
-        console.log('Retrying project fetch...');
-        try {
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-          projectDoc = await getDoc(projectRef);
-          console.log('Retry successful');
-        } catch (retryError) {
-          console.error('Retry failed:', retryError);
-          throw new Error('Failed to access project data after retry');
-        }
-      } else {
-        throw new Error('Failed to access project data');
-      }
-    }
+    // Try to fetch the project with retries
+    const projectDoc = await tryFetchProject();
 
     if (!projectDoc.exists()) {
-      console.log('Project not found by direct ID');
+      console.log('Project not found by ID:', projectId);
       throw new Error('Project not found');
     }
 
@@ -104,18 +97,17 @@ export const validateInvite = async (inviteId, projectId) => {
       throw new Error('Invalid project data');
     }
 
-    console.log('Project data:', {
+    console.log('Project data retrieved:', {
       id: projectDoc.id,
       invitesCount: projectData.invites?.length || 0,
       hasInvites: !!projectData.invites
     });
 
-    // Find the invite in the project's invites array
+    // Find the invite
     const invites = projectData.invites || [];
-    console.log('Looking for invite:', inviteId, 'in', invites.length, 'invites');
+    console.log(`Searching for invite ${inviteId} in ${invites.length} invites`);
 
     const invite = invites.find(link => link.id === inviteId);
-
     if (!invite) {
       console.log('Available invites:', invites.map(i => ({ id: i.id, role: i.role })));
       throw new Error('Invite not found');
@@ -129,6 +121,7 @@ export const validateInvite = async (inviteId, projectId) => {
       createdAt: invite.createdAt
     });
 
+    // Validate invite
     const now = new Date();
     const expiresAt = new Date(invite.expiresAt);
 
@@ -140,7 +133,7 @@ export const validateInvite = async (inviteId, projectId) => {
       throw new Error('Invite is no longer active');
     }
 
-    // Return the actual project ID from where we found the invite
+    // Return validation result
     const result = {
       isValid: true,
       type: invite.role === 'editor' ? 'team' : 'view',
