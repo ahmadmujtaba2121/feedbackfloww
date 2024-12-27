@@ -1,68 +1,65 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL
+  apiKey: "AIzaSyDT4NPibL9xVBKlJW3G3F_xa39xmH-aW2c",
+  authDomain: "feedbackflow-ae91d.firebaseapp.com",
+  projectId: "feedbackflow-ae91d",
+  storageBucket: "feedbackflow-ae91d.appspot.com",
+  messagingSenderId: "314519829180",
+  appId: "1:314519829180:web:f5fef6bf87d2098544aeb9",
+  measurementId: "G-ZNJZ5F7S6G",
+  databaseURL: "https://feedbackflow-ae91d-default-rtdb.firebaseio.com"
 };
 
-// Log Firebase config (without sensitive data)
-console.log('Firebase config:', {
-  authDomain: firebaseConfig.authDomain,
-  projectId: firebaseConfig.projectId,
-  storageBucket: firebaseConfig.storageBucket,
-  hasApiKey: !!firebaseConfig.apiKey,
-  hasAppId: !!firebaseConfig.appId
-});
-
-// Initialize Firebase only if it hasn't been initialized yet
+// Initialize Firebase
 let app;
 let db;
 let auth;
 let storage;
 
-try {
-  if (!getApps().length) {
-    console.log('Initializing Firebase app...');
-    app = initializeApp(firebaseConfig);
-  } else {
-    console.log('Using existing Firebase app');
-    app = getApps()[0];
-  }
-
-  // Initialize services
-  console.log('Initializing Firebase services...');
-  auth = getAuth(app);
-  db = getFirestore(app);
-  storage = getStorage(app);
-
-  // Enable offline persistence
-  enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-      console.warn('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-    } else if (err.code === 'unimplemented') {
-      console.warn('The current browser doesn\'t support persistence.');
+const initializeFirebase = () => {
+  try {
+    if (!getApps().length) {
+      console.log('Initializing new Firebase app...');
+      app = initializeApp(firebaseConfig);
+    } else {
+      console.log('Using existing Firebase app');
+      app = getApps()[0];
     }
-  });
 
-  console.log('Firebase services initialized successfully');
-} catch (error) {
-  console.error('Firebase initialization error:', {
-    message: error.message,
-    code: error.code,
-    stack: error.stack
-  });
-  throw error;
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
+
+    // Set Firestore settings
+    const settings = {
+      experimentalForceLongPolling: true, // This may help with connection issues
+      merge: true
+    };
+
+    console.log('Firebase services initialized successfully');
+    return true;
+  } catch (error) {
+    console.error('Firebase initialization error:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+    return false;
+  }
+};
+
+// Initialize Firebase
+const isInitialized = initializeFirebase();
+
+if (!isInitialized) {
+  console.error('Failed to initialize Firebase, retrying...');
+  // Retry initialization
+  setTimeout(initializeFirebase, 1000);
 }
 
-// Export initialized services
 export { app, auth, db, storage };
 export default app;

@@ -49,7 +49,7 @@ export const createProjectInvite = async (projectId, creatorEmail, type = 'view'
 
 export const validateInvite = async (inviteId, projectId) => {
   try {
-    console.log('Starting invite validation:', { projectId, inviteId }); // Debug log
+    console.log('Starting invite validation:', { projectId, inviteId });
 
     // Check if Firestore is initialized
     if (!db) {
@@ -67,49 +67,43 @@ export const validateInvite = async (inviteId, projectId) => {
       console.log('Project fetch result:', {
         exists: projectDoc.exists(),
         id: projectDoc.id,
-        path: projectDoc.ref.path
+        path: projectRef.path
       });
     } catch (fetchError) {
-      console.error('Error fetching project:', fetchError);
-      throw new Error('Failed to access project data');
-    }
+      console.error('Error fetching project:', {
+        error: fetchError.message,
+        code: fetchError.code,
+        projectId,
+        path: projectRef.path
+      });
 
-    if (!projectDoc.exists()) {
-      console.log('Project not found by direct ID, searching all projects...'); // Debug log
-
-      try {
-        // If direct lookup fails, search all projects
-        const projectsRef = collection(db, 'projects');
-        const querySnapshot = await getDocs(projectsRef);
-
-        console.log('Total projects found:', querySnapshot.size); // Debug log
-
-        for (const doc of querySnapshot.docs) {
-          const data = doc.data();
-          console.log('Checking project:', {
-            id: doc.id,
-            hasInvites: !!data.invites,
-            inviteCount: data.invites?.length || 0
-          });
-
-          const foundInvite = data.invites?.find(invite => invite.id === inviteId);
-          if (foundInvite) {
-            console.log('Found invite in project:', doc.id);
-            projectDoc = doc;
-            break;
-          }
+      // If it's a connection error, retry once
+      if (fetchError.code === 'failed-precondition' || fetchError.code === 'unavailable') {
+        console.log('Retrying project fetch...');
+        try {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+          projectDoc = await getDoc(projectRef);
+          console.log('Retry successful');
+        } catch (retryError) {
+          console.error('Retry failed:', retryError);
+          throw new Error('Failed to access project data after retry');
         }
-      } catch (searchError) {
-        console.error('Error searching projects:', searchError);
-        throw new Error('Failed to search for invite');
+      } else {
+        throw new Error('Failed to access project data');
       }
     }
 
     if (!projectDoc.exists()) {
+      console.log('Project not found by direct ID');
       throw new Error('Project not found');
     }
 
     const projectData = projectDoc.data();
+    if (!projectData) {
+      console.error('Project data is null');
+      throw new Error('Invalid project data');
+    }
+
     console.log('Project data:', {
       id: projectDoc.id,
       invitesCount: projectData.invites?.length || 0,
@@ -117,10 +111,13 @@ export const validateInvite = async (inviteId, projectId) => {
     });
 
     // Find the invite in the project's invites array
-    const invite = (projectData.invites || []).find(link => link.id === inviteId);
+    const invites = projectData.invites || [];
+    console.log('Looking for invite:', inviteId, 'in', invites.length, 'invites');
+
+    const invite = invites.find(link => link.id === inviteId);
 
     if (!invite) {
-      console.log('Available invites:', projectData.invites?.map(i => ({ id: i.id, role: i.role })));
+      console.log('Available invites:', invites.map(i => ({ id: i.id, role: i.role })));
       throw new Error('Invite not found');
     }
 
