@@ -70,11 +70,38 @@
       color: #E5E9F0;
     }
   </style>
+
+  <!-- Add meta tags for better SEO and sharing -->
+  <meta name="description" content="FeedbackFlow - Collaborative feedback and project management" />
+  <meta property="og:title" content="FeedbackFlow" />
+  <meta property="og:description" content="Collaborative feedback and project management" />
+  <meta property="og:type" content="website" />
+
+  <!-- Add preconnect for Firebase -->
+  <link rel="preconnect" href="https://firebaseapp.com" />
+  <link rel="preconnect" href="https://firestore.googleapis.com" />
 </head>
 
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
+
+  <!-- Add fallback for 404 errors -->
+  <script>
+    // Handle 404s by redirecting to index.html
+    (function () {
+      if (window.location.pathname.includes('/invite/') || window.location.pathname.includes('/project/')) {
+        const path = window.location.pathname;
+        if (path.endsWith('.js') || path.endsWith('.css') || path.endsWith('.ico')) {
+          return; // Don't redirect asset requests
+        }
+        if (window.location.pathname !== '/' && !document.getElementById('root').hasChildNodes()) {
+          window.history.replaceState(null, null, window.location.pathname);
+          window.location.reload();
+        }
+      }
+    })();
+  </script>
 </body>
 
 </html>

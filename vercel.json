@@ -1,5 +1,22 @@
 {
     "version": 2,
+    "routes": [
+        {
+            "src": "/invite/[^/]+/[^/]+",
+            "dest": "/index.html"
+        },
+        {
+            "src": "/project/[^/]+",
+            "dest": "/index.html"
+        },
+        {
+            "handle": "filesystem"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/index.html"
+        }
+    ],
     "builds": [
         {
             "src": "client/package.json",
@@ -7,12 +24,6 @@
             "config": {
                 "distDir": "dist"
             }
-        }
-    ],
-    "routes": [
-        {
-            "src": "/(.*)",
-            "dest": "client/dist/$1"
         }
     ]
 }
