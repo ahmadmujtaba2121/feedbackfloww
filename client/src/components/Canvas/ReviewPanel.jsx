@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiChevronRight, FiChevronLeft, FiClock, FiDollarSign, FiTag, FiPlay, FiPause, FiUpload, FiTrash2, FiEye, FiDownload } from 'react-icons/fi';
+import { FiX, FiChevronRight, FiChevronLeft, FiClock, FiDollarSign, FiTag, FiPlay, FiPause, FiUpload, FiTrash2, FiEye, FiDownload, FiCheck, FiAlertCircle, FiMessageCircle, FiEdit2 } from 'react-icons/fi';
 import TaskStatusSelector from '../TaskStatusSelector';
 import { updateTaskStatus } from '../../utils/taskUtils';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,7 +9,10 @@ import { doc, onSnapshot, getDoc, updateDoc, serverTimestamp, arrayUnion } from 
 import { db } from '../../firebase/firebase';
 import { toast } from 'react-hot-toast';
 import WatermarkedImage from '../WatermarkedImage';
-import WatermarkedPDF from '../WatermarkedPDF';
+import { formatTimestamp } from '../../utils/dateUtils';
+import { useNotification } from '../../contexts/NotificationContext';
+import { PremiumFeature } from '../PremiumFeature';
+import { useNavigate } from 'react-router-dom';
 
 const ReviewPanel = ({
   isOpen,
