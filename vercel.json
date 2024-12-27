@@ -12,6 +12,14 @@
     ],
     "routes": [
         {
+            "src": "/invite/:projectId/:inviteId",
+            "dest": "/index.html"
+        },
+        {
+            "src": "/project/:projectId",
+            "dest": "/index.html"
+        },
+        {
             "src": "/assets/(.*)",
             "dest": "/assets/$1"
         },
@@ -42,12 +50,22 @@
             "handle": "filesystem"
         },
         {
-            "src": "/(invite|project)/.*",
-            "dest": "/index.html"
-        },
-        {
             "src": "/(.*)",
             "dest": "/index.html"
+        }
+    ],
+    "rewrites": [
+        {
+            "source": "/invite/:projectId/:inviteId",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/project/:projectId",
+            "destination": "/index.html"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
         }
     ],
     "cleanUrls": true,
