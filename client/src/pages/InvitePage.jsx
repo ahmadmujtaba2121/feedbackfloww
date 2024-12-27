@@ -14,6 +14,7 @@ const InvitePage = () => {
   const [error, setError] = useState(null);
   const [validatingInvite, setValidatingInvite] = useState(true);
   const [inviteValid, setInviteValid] = useState(false);
+  const [actualProjectId, setActualProjectId] = useState(null);
 
   // First, validate the invite without requiring authentication
   useEffect(() => {
@@ -32,6 +33,14 @@ const InvitePage = () => {
           throw new Error('Invalid or expired invite');
         }
 
+        // If project ID doesn't match, redirect to the correct URL
+        if (validationResult.projectId !== projectId) {
+          const correctUrl = `/invite/${validationResult.projectId}/${cleanInviteId}`;
+          navigate(correctUrl, { replace: true });
+          return;
+        }
+
+        setActualProjectId(validationResult.projectId);
         setInviteValid(true);
       } catch (err) {
         console.error('Error validating invite:', err);
@@ -42,25 +51,25 @@ const InvitePage = () => {
     };
 
     validateInviteOnly();
-  }, [projectId, inviteId]);
+  }, [projectId, inviteId, navigate]);
 
   // Then, handle the authentication and acceptance flow
   useEffect(() => {
     const processInvite = async () => {
       try {
-        if (!inviteValid) return;
+        if (!inviteValid || !actualProjectId) return;
 
         const cleanInviteId = inviteId.split('activity')[0];
 
         // If user is not logged in, redirect to sign in
         if (!currentUser) {
-          const returnUrl = encodeURIComponent(`/invite/${projectId}/${cleanInviteId}`);
+          const returnUrl = encodeURIComponent(`/invite/${actualProjectId}/${cleanInviteId}`);
           navigate(`/signin?redirect=${returnUrl}`);
           return;
         }
 
-        // Accept the invite
-        const { redirect, type } = await acceptInvite(projectId, cleanInviteId, currentUser.email);
+        // Accept the invite using the actual project ID
+        const { redirect, type } = await acceptInvite(actualProjectId, cleanInviteId, currentUser.email);
         toast.success(`Successfully joined the project as ${type === 'team' ? 'a team member' : 'a viewer'}!`);
         navigate(redirect, { replace: true });
       } catch (err) {
@@ -73,7 +82,7 @@ const InvitePage = () => {
     };
 
     processInvite();
-  }, [projectId, inviteId, currentUser, navigate, inviteValid]);
+  }, [projectId, inviteId, currentUser, navigate, inviteValid, actualProjectId]);
 
   if (validatingInvite || loading) {
     return (
@@ -107,7 +116,7 @@ const InvitePage = () => {
         </div>
         <button
           onClick={() => {
-            const returnUrl = encodeURIComponent(`/invite/${projectId}/${inviteId.split('activity')[0]}`);
+            const returnUrl = encodeURIComponent(`/invite/${actualProjectId}/${inviteId.split('activity')[0]}`);
             navigate(`/signin?redirect=${returnUrl}`);
           }}
           className="px-4 py-2 bg-[#1B2B44] text-[#E5E9F0] rounded-lg hover:bg-[#2B3B54] transition-colors"
