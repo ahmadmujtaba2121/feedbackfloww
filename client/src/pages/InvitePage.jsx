@@ -19,15 +19,18 @@ const InvitePage = () => {
           throw new Error('Invalid invite link');
         }
 
+        // Clean the inviteId in case it has any extra text
+        const cleanInviteId = inviteId.split('activity')[0]; // Remove any trailing text
+
         // If user is not logged in, redirect to sign in
         if (!currentUser) {
-          const returnUrl = encodeURIComponent(`/invite/${projectId}/${inviteId}`);
+          const returnUrl = encodeURIComponent(`/invite/${projectId}/${cleanInviteId}`);
           navigate(`/signin?redirect=${returnUrl}`);
           return;
         }
 
         // First validate the invite
-        const validationResult = await validateInvite(inviteId);
+        const validationResult = await validateInvite(cleanInviteId, projectId);
         if (!validationResult.isValid) {
           throw new Error('Invalid or expired invite');
         }
@@ -38,7 +41,7 @@ const InvitePage = () => {
         }
 
         // Accept the invite
-        const { redirect, type } = await acceptInvite(projectId, inviteId, currentUser.email);
+        const { redirect, type } = await acceptInvite(projectId, cleanInviteId, currentUser.email);
         toast.success(`Successfully joined the project as ${type === 'team' ? 'a team member' : 'a viewer'}!`);
         navigate(redirect, { replace: true });
       } catch (err) {

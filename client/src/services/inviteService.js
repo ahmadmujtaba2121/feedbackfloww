@@ -44,27 +44,19 @@ export const createProjectInvite = async (projectId, creatorEmail, type = 'view'
   }
 };
 
-export const validateInvite = async (inviteId) => {
+export const validateInvite = async (inviteId, projectId) => {
   try {
-    // Query all projects since we can't do array-contains with a partial object match
-    const projectsRef = collection(db, 'projects');
-    const projectsSnapshot = await getDocs(projectsRef);
+    // Get the specific project document
+    const projectDoc = await getDoc(doc(db, 'projects', projectId));
 
-    let projectDoc = null;
-    let invite = null;
-
-    // Find the project containing the invite
-    for (const doc of projectsSnapshot.docs) {
-      const projectData = doc.data();
-      const foundInvite = (projectData.invites || []).find(link => link.id === inviteId);
-      if (foundInvite) {
-        projectDoc = doc;
-        invite = foundInvite;
-        break;
-      }
+    if (!projectDoc.exists()) {
+      throw new Error('Project not found');
     }
 
-    if (!projectDoc || !invite) {
+    const projectData = projectDoc.data();
+    const invite = (projectData.invites || []).find(link => link.id === inviteId);
+
+    if (!invite) {
       throw new Error('Invite not found');
     }
 
