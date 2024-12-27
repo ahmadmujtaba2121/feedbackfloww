@@ -16,64 +16,76 @@ const InvitePage = () => {
   const [inviteValid, setInviteValid] = useState(false);
   const [actualProjectId, setActualProjectId] = useState(null);
 
+  useEffect(() => {
+    console.log('InvitePage mounted with:', { projectId, inviteId, currentUser: !!currentUser });
+  }, [projectId, inviteId, currentUser]);
+
   // First, validate the invite without requiring authentication
   useEffect(() => {
     const validateInviteOnly = async () => {
       try {
         if (!projectId || !inviteId) {
+          console.log('Missing required parameters:', { projectId, inviteId });
           throw new Error('Invalid invite link');
         }
 
         // Clean the inviteId in case it has any extra text
         const cleanInviteId = inviteId.split('activity')[0]; // Remove any trailing text
+        console.log('Cleaned invite ID:', cleanInviteId);
 
         // First validate the invite
+        console.log('Starting invite validation...');
         const validationResult = await validateInvite(cleanInviteId, projectId);
+        console.log('Validation result:', validationResult);
+
         if (!validationResult.isValid) {
           throw new Error('Invalid or expired invite');
         }
 
-        // If project ID doesn't match, redirect to the correct URL
-        if (validationResult.projectId !== projectId) {
-          const correctUrl = `/invite/${validationResult.projectId}/${cleanInviteId}`;
-          navigate(correctUrl, { replace: true });
-          return;
-        }
-
         setActualProjectId(validationResult.projectId);
         setInviteValid(true);
+        console.log('Invite validated successfully');
       } catch (err) {
-        console.error('Error validating invite:', err);
+        console.error('Validation error:', err);
         setError(err.message || 'Failed to validate invite');
+        toast.error(err.message || 'Failed to validate invite');
       } finally {
         setValidatingInvite(false);
       }
     };
 
     validateInviteOnly();
-  }, [projectId, inviteId, navigate]);
+  }, [projectId, inviteId]);
 
   // Then, handle the authentication and acceptance flow
   useEffect(() => {
     const processInvite = async () => {
       try {
-        if (!inviteValid || !actualProjectId) return;
+        if (!inviteValid || !actualProjectId) {
+          console.log('Not ready to process invite:', { inviteValid, actualProjectId });
+          return;
+        }
 
         const cleanInviteId = inviteId.split('activity')[0];
+        console.log('Processing invite:', { cleanInviteId, actualProjectId });
 
         // If user is not logged in, redirect to sign in
         if (!currentUser) {
           const returnUrl = encodeURIComponent(`/invite/${actualProjectId}/${cleanInviteId}`);
+          console.log('Redirecting to sign in:', returnUrl);
           navigate(`/signin?redirect=${returnUrl}`);
           return;
         }
 
-        // Accept the invite using the actual project ID
+        // Accept the invite
+        console.log('Accepting invite...');
         const { redirect, type } = await acceptInvite(actualProjectId, cleanInviteId, currentUser.email);
+        console.log('Invite accepted:', { redirect, type });
+
         toast.success(`Successfully joined the project as ${type === 'team' ? 'a team member' : 'a viewer'}!`);
         navigate(redirect, { replace: true });
       } catch (err) {
-        console.error('Error processing invite:', err);
+        console.error('Processing error:', err);
         setError(err.message || 'Failed to process invite');
         toast.error(err.message || 'Failed to process invite');
       } finally {

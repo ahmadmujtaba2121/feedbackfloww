@@ -49,35 +49,59 @@ export const createProjectInvite = async (projectId, creatorEmail, type = 'view'
 
 export const validateInvite = async (inviteId, projectId) => {
   try {
-    console.log('Validating invite:', { projectId, inviteId }); // Debug log
+    console.log('Starting invite validation:', { projectId, inviteId }); // Debug log
 
-    // Get the project document
+    // First try direct project lookup
     const projectRef = doc(db, 'projects', projectId);
-    const projectDoc = await getDoc(projectRef);
+    let projectDoc = await getDoc(projectRef);
+
+    console.log('Project document exists:', projectDoc.exists()); // Debug log
 
     if (!projectDoc.exists()) {
-      console.log('Project not found:', projectId); // Debug log
+      console.log('Project not found by direct ID, searching all projects...'); // Debug log
+
+      // If direct lookup fails, search all projects
+      const projectsRef = collection(db, 'projects');
+      const querySnapshot = await getDocs(projectsRef);
+
+      console.log('Total projects found:', querySnapshot.size); // Debug log
+
+      for (const doc of querySnapshot.docs) {
+        const data = doc.data();
+        console.log('Checking project:', doc.id); // Debug log
+
+        if (data.invites && data.invites.some(invite => invite.id === inviteId)) {
+          console.log('Found invite in project:', doc.id); // Debug log
+          projectDoc = doc;
+          break;
+        }
+      }
+    }
+
+    if (!projectDoc.exists()) {
       throw new Error('Project not found');
     }
 
     const projectData = projectDoc.data();
-    console.log('Found project:', projectId); // Debug log
+    console.log('Project data:', {
+      id: projectDoc.id,
+      invitesCount: projectData.invites?.length || 0
+    }); // Debug log
 
     // Find the invite in the project's invites array
     const invite = (projectData.invites || []).find(link => link.id === inviteId);
 
     if (!invite) {
-      console.log('Invite not found in project:', { projectId, inviteId }); // Debug log
+      console.log('Available invites:', projectData.invites); // Debug log
       throw new Error('Invite not found');
     }
 
-    console.log('Found invite:', invite); // Debug log
-
-    // Verify that the invite belongs to this project
-    if (invite.projectId !== projectId) {
-      console.log('Project ID mismatch:', { expected: projectId, found: invite.projectId }); // Debug log
-      throw new Error('Invalid project ID');
-    }
+    console.log('Found invite:', {
+      id: invite.id,
+      projectId: invite.projectId,
+      role: invite.role,
+      status: invite.status
+    }); // Debug log
 
     const now = new Date();
     const expiresAt = new Date(invite.expiresAt);
@@ -90,13 +114,19 @@ export const validateInvite = async (inviteId, projectId) => {
       throw new Error('Invite is no longer active');
     }
 
+    // Return the actual project ID from where we found the invite
     return {
       isValid: true,
       type: invite.role === 'editor' ? 'team' : 'view',
-      projectId: projectId
+      projectId: projectDoc.id
     };
   } catch (error) {
-    console.error('Error validating invite:', error);
+    console.error('Validation error details:', {
+      error: error.message,
+      code: error.code,
+      projectId,
+      inviteId
+    }); // Enhanced error logging
     throw error;
   }
 };
