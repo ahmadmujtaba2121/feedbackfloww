@@ -15,11 +15,24 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: true,
     rollupOptions: {
-      external: ['react-helmet-async', 'react-big-calendar'],
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage']
+          vendor: [
+            'react',
+            'react-dom',
+            'react-router-dom',
+            'react-helmet-async',
+            'react-icons',
+            'react-hot-toast',
+            'react-beautiful-dnd',
+            'react-big-calendar',
+            'react-color',
+            'react-colorful',
+            'react-hotkeys-hook',
+            'react-syntax-highlighter'
+          ],
+          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
+          utils: ['date-fns', 'lodash', 'roughjs', 'canvas-confetti', 'framer-motion']
         }
       }
     }
@@ -39,7 +52,19 @@ export default defineConfig({
       'firebase/firestore',
       'firebase/storage',
       'react-helmet-async',
-      'react-big-calendar'
+      'react-icons',
+      'react-hot-toast',
+      'react-beautiful-dnd',
+      'react-big-calendar',
+      'react-color',
+      'react-colorful',
+      'react-hotkeys-hook',
+      'react-syntax-highlighter',
+      'date-fns',
+      'lodash',
+      'roughjs',
+      'canvas-confetti',
+      'framer-motion'
     ]
   },
   preview: {
