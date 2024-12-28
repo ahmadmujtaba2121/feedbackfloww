@@ -6,7 +6,7 @@ import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 import LoadingSpinner from '../components/LoadingSpinner';
 
-const TIMEOUT_DURATION = 15000; // 15 seconds timeout
+const TIMEOUT_DURATION = 15000;
 
 const LoadingScreen = ({ message }) => (
   <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
@@ -46,28 +46,14 @@ const InvitePage = () => {
   const location = useLocation();
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
-  const [projectData, setProjectData] = useState(null);
-
-  // Check if this is an invite link
-  const isInviteLink = location.pathname.includes('/invite/');
 
   useEffect(() => {
-    // For normal access (not invite link), use simple auth check
-    if (!isInviteLink) {
-      const unsubscribe = auth.onAuthStateChanged((user) => {
-        if (!user) {
-          navigate('/signin', { replace: true });
-        }
-      });
-      return () => unsubscribe();
-    }
-
-    // For invite links, use the special loading flow
     let mounted = true;
     let timeoutId = null;
 
-    const validateInviteLink = async () => {
+    const processInvite = async () => {
       try {
+        // Ensure Firebase is initialized
         if (!isFirebaseInitialized()) {
           const initialized = ensureFirebaseInitialized();
           if (!initialized) {
@@ -75,46 +61,43 @@ const InvitePage = () => {
           }
         }
 
-        // First validate the invite without auth
+        // First validate the invite
         const result = await validateInvite(inviteId, projectId);
+
         if (!mounted) return;
 
-        setProjectData(result);
-        setStatus('validating');
+        // Check current auth state
+        const user = auth.currentUser;
 
-        // Now check auth state
-        const unsubscribe = auth.onAuthStateChanged(async (user) => {
-          if (!mounted) return;
-
-          if (user) {
-            try {
-              const projectRef = doc(db, 'projects', projectId);
-              await updateDoc(projectRef, {
-                invites: arrayUnion({
-                  ...result.inviteData,
-                  used: true,
-                  usedAt: new Date().toISOString(),
-                  usedBy: user.email
-                })
-              });
-            } catch (updateError) {
-              console.error('Error updating invite status:', updateError);
-            }
-
-            const path = result.inviteData.role === 'editor'
-              ? `/project/${projectId}/canvas`
-              : `/project/${projectId}`;
-
-            navigate(path, { replace: true });
-          } else {
-            const returnUrl = encodeURIComponent(`/invite/${projectId}/${inviteId}`);
-            navigate(`/signin?redirect=${returnUrl}`, { replace: true });
+        if (user) {
+          // User is logged in, update invite and redirect
+          try {
+            const projectRef = doc(db, 'projects', projectId);
+            await updateDoc(projectRef, {
+              invites: arrayUnion({
+                ...result.inviteData,
+                used: true,
+                usedAt: new Date().toISOString(),
+                usedBy: user.email
+              })
+            });
+          } catch (updateError) {
+            console.error('Error updating invite status:', updateError);
           }
-        });
 
-        return () => unsubscribe();
+          // Navigate to appropriate page
+          const path = result.inviteData.role === 'editor'
+            ? `/project/${projectId}/canvas`
+            : `/project/${projectId}`;
+
+          navigate(path, { replace: true });
+        } else {
+          // User is not logged in, redirect to sign in
+          const returnUrl = encodeURIComponent(`/invite/${projectId}/${inviteId}`);
+          navigate(`/signin?redirect=${returnUrl}`, { replace: true });
+        }
       } catch (error) {
-        console.error('Invite validation error:', error);
+        console.error('Invite processing error:', error);
         if (mounted) {
           setError(error.message || 'Failed to process invite');
           setStatus('error');
@@ -122,38 +105,26 @@ const InvitePage = () => {
       }
     };
 
-    if (isInviteLink) {
-      timeoutId = setTimeout(() => {
-        if (mounted) {
-          setStatus('timeout');
-        }
-      }, TIMEOUT_DURATION);
+    // Set timeout for the entire process
+    timeoutId = setTimeout(() => {
+      if (mounted) {
+        setStatus('timeout');
+      }
+    }, TIMEOUT_DURATION);
 
-      validateInviteLink();
-    }
+    // Start processing
+    processInvite();
 
     return () => {
       mounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [projectId, inviteId, navigate, isInviteLink, location.pathname]);
+  }, [projectId, inviteId, navigate]);
 
-  // For non-invite access, show simple loading
-  if (!isInviteLink) {
-    return (
-      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
-        <LoadingSpinner />
-      </div>
-    );
-  }
-
-  // For invite links, show appropriate UI based on status
+  // Show appropriate UI based on status
   switch (status) {
     case 'loading':
-      return <LoadingScreen message="Loading invite details..." />;
-
-    case 'validating':
-      return <LoadingScreen message="Validating your access..." />;
+      return <LoadingScreen message="Processing invite..." />;
 
     case 'timeout':
       return (
