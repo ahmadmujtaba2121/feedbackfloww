@@ -29,6 +29,7 @@ const JoinProject = () => {
             ]);
 
             let projectDoc = viewerSnapshot.docs[0] || editorSnapshot.docs[0];
+            let isEditorCode = editorSnapshot.docs.length > 0;
 
             if (!projectDoc) {
                 toast.error('Project not found');
@@ -46,28 +47,36 @@ const JoinProject = () => {
                 return;
             }
 
-            // Determine role based on which code was used
-            const role = code === projectData.editorCode ? 'EDITOR' : 'VIEWER';
-
             // Get user's display name from Firebase Auth
             const displayName = currentUser.displayName || currentUser.email.split('@')[0];
 
-            // Add user to project members
+            // Add user to project members with correct role
             const newMember = {
                 email: currentUser.email,
                 displayName,
-                role,
+                role: isEditorCode ? 'EDITOR' : 'VIEWER',
                 uid: currentUser.uid,
+                status: 'active',
                 addedAt: new Date().toISOString()
             };
 
-            // Update project with new member
+            // Add activity log entry
+            const activityEntry = {
+                type: 'member_joined',
+                user: currentUser.email,
+                role: isEditorCode ? 'EDITOR' : 'VIEWER',
+                timestamp: new Date().toISOString()
+            };
+
+            // Update project with new member and activity
             await updateDoc(doc(db, 'projects', projectId), {
                 members: [...(projectData.members || []), newMember],
-                updatedAt: new Date().toISOString()
+                activityLog: [...(projectData.activityLog || []), activityEntry],
+                updatedAt: new Date().toISOString(),
+                lastModifiedBy: currentUser.email
             });
 
-            toast.success('Successfully joined project');
+            toast.success(`Successfully joined project as ${isEditorCode ? 'editor' : 'viewer'}`);
             navigate(`/project/${projectId}`);
         } catch (error) {
             console.error('Error joining project:', error);
