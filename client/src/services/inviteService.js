@@ -1,5 +1,6 @@
 import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
+import { v4 as uuidv4 } from 'uuid';
 
 export const validateInvite = async (projectId, inviteId) => {
   try {
@@ -24,6 +25,35 @@ export const validateInvite = async (projectId, inviteId) => {
     };
   } catch (error) {
     console.error('Validate invite error:', error);
+    throw error;
+  }
+};
+
+export const createProjectInvite = async (projectId, creatorEmail) => {
+  try {
+    const projectRef = doc(db, 'projects', projectId);
+    const projectDoc = await getDoc(projectRef);
+
+    if (!projectDoc.exists()) {
+      throw new Error('Project not found');
+    }
+
+    // Generate a unique invite ID
+    const inviteId = uuidv4();
+
+    // Update project with new invite
+    await updateDoc(projectRef, {
+      invites: arrayUnion(inviteId),
+      [`lastActivity.${creatorEmail.replace(/\./g, '_')}`]: serverTimestamp()
+    });
+
+    // Return the invite details
+    return {
+      inviteId,
+      inviteLink: `${window.location.origin}/invite/${projectId}/${inviteId}`
+    };
+  } catch (error) {
+    console.error('Create invite error:', error);
     throw error;
   }
 };
