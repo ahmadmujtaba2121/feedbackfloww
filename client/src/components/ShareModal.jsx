@@ -1,163 +1,120 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FiShare2, FiCopy, FiCheck, FiX, FiUsers } from 'react-icons/fi';
-import { createProjectInvite } from '../services/inviteService';
+import { FiCopy, FiCheck, FiX, FiUsers, FiEye } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import { motion } from 'framer-motion';
+import { db } from '../firebase/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
 const ShareModal = ({ isOpen, onClose, projectId }) => {
   const { currentUser } = useAuth();
-  const [inviteLink, setInviteLink] = useState('');
   const [copied, setCopied] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [inviteType, setInviteType] = useState('view'); // 'view' or 'team'
+  const [accessType, setAccessType] = useState('viewer'); // 'viewer' or 'editor'
 
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen]);
-
-  const handleGenerateLink = async () => {
-    setLoading(true);
+  const handleCopy = async () => {
     try {
-      const invite = await createProjectInvite(projectId, currentUser.email, inviteType);
-      setInviteLink(invite.inviteLink);
-      toast.success('Invite link generated successfully');
+      await navigator.clipboard.writeText(projectId);
+      setCopied(true);
+      toast.success('Project code copied to clipboard');
+      setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error('Error generating invite link:', error);
-      toast.error('Failed to generate invite link');
-    } finally {
-      setLoading(false);
+      console.error('Error copying code:', error);
+      toast.error('Failed to copy project code');
     }
   };
 
-  const handleCopyLink = async () => {
+  const updateProjectAccess = async (type) => {
     try {
-      await navigator.clipboard.writeText(inviteLink);
-      setCopied(true);
-      toast.success('Link copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
+      const projectRef = doc(db, 'projects', projectId);
+      await updateDoc(projectRef, {
+        accessType: type
+      });
+      toast.success(`Project access updated to ${type}`);
+      setAccessType(type);
     } catch (error) {
-      console.error('Error copying link:', error);
-      toast.error('Failed to copy link');
+      console.error('Error updating project access:', error);
+      toast.error('Failed to update project access');
     }
   };
 
   if (!isOpen) return null;
 
   const modalContent = (
-    <div className="fixed inset-0" style={{ zIndex: 999999 }}>
+    <div className="fixed inset-0 z-50">
       <div className="fixed inset-0 flex items-center justify-center p-4">
         {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-[#080C14]/80 backdrop-blur-sm"
+        <div
+          className="fixed inset-0 bg-background/80 backdrop-blur-sm"
           onClick={onClose}
         />
 
         {/* Modal Content */}
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
+        <div
           onClick={e => e.stopPropagation()}
-          className="relative w-full max-w-lg bg-[#0A1628] rounded-lg shadow-xl overflow-hidden border border-[#1B2B44]"
+          className="relative w-full max-w-lg bg-foreground rounded-lg shadow-xl p-6 border border-border"
         >
           {/* Header */}
-          <div className="px-6 py-4 border-b border-[#1B2B44] flex items-center justify-between">
-            <h3 className="text-lg font-medium text-[#E5E9F0]">Share Project</h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-medium text-primary">Share Project</h3>
             <button
               onClick={onClose}
-              className="p-1 hover:bg-[#1B2B44] rounded-lg transition-colors"
+              className="p-1 hover:bg-background rounded-lg transition-colors"
             >
-              <FiX className="w-5 h-5 text-[#94A3B8] hover:text-[#E5E9F0]" />
+              <FiX className="w-5 h-5 text-muted-foreground" />
             </button>
           </div>
 
           {/* Content */}
-          <div className="px-6 py-4">
-            <div className="space-y-6">
-              <div>
-                <p className="text-[#94A3B8] mb-4">
-                  Generate a link to share this project. Choose whether to invite team members or share for viewing.
-                </p>
+          <div className="space-y-6">
+            <div>
+              <p className="text-muted-foreground mb-4">
+                Share this project code with team members. Choose the access level for new members:
+              </p>
 
-                {/* Invite Type Selection */}
-                <div className="flex space-x-4 mb-6">
-                  <button
-                    onClick={() => setInviteType('view')}
-                    className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2 ${inviteType === 'view'
-                      ? 'bg-[#2DD4BF] text-[#0A1628] font-medium'
-                      : 'bg-[#1B2B44] text-[#94A3B8] hover:bg-[#2B3B54]'
-                      }`}
-                  >
-                    <FiShare2 className="w-5 h-5" />
-                    <span>View Only</span>
-                  </button>
-                  <button
-                    onClick={() => setInviteType('team')}
-                    className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center space-x-2 ${inviteType === 'team'
-                      ? 'bg-[#2DD4BF] text-[#0A1628] font-medium'
-                      : 'bg-[#1B2B44] text-[#94A3B8] hover:bg-[#2B3B54]'
-                      }`}
-                  >
-                    <FiUsers className="w-5 h-5" />
-                    <span>Team Member</span>
-                  </button>
-                </div>
+              {/* Access Type Selection */}
+              <div className="flex space-x-4 mb-6">
+                <button
+                  onClick={() => updateProjectAccess('viewer')}
+                  className={`flex-1 px-4 py-3 rounded-lg border transition-colors flex items-center justify-center space-x-2 ${accessType === 'viewer'
+                    ? 'bg-primary/10 border-primary text-primary'
+                    : 'border-border hover:bg-muted'
+                    }`}
+                >
+                  <FiEye className="w-5 h-5" />
+                  <span>Viewer Access</span>
+                </button>
+                <button
+                  onClick={() => updateProjectAccess('editor')}
+                  className={`flex-1 px-4 py-3 rounded-lg border transition-colors flex items-center justify-center space-x-2 ${accessType === 'editor'
+                    ? 'bg-primary/10 border-primary text-primary'
+                    : 'border-border hover:bg-muted'
+                    }`}
+                >
+                  <FiUsers className="w-5 h-5" />
+                  <span>Editor Access</span>
+                </button>
+              </div>
 
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-4">
-                    <button
-                      onClick={handleGenerateLink}
-                      disabled={loading}
-                      className="w-full px-4 py-2 bg-[#2DD4BF] text-[#0A1628] rounded-lg hover:bg-[#14B8A6] disabled:opacity-50 flex items-center justify-center space-x-2 font-medium"
-                    >
-                      {loading ? (
-                        <span>Generating link...</span>
-                      ) : (
-                        <>
-                          <FiShare2 className="w-5 h-5" />
-                          <span>Generate {inviteType === 'team' ? 'Team' : 'View'} Invite Link</span>
-                        </>
-                      )}
-                    </button>
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <div className="flex-1 bg-background p-3 rounded-lg border border-border font-mono">
+                    {projectId}
                   </div>
-
-                  {inviteLink && (
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="text"
-                        value={inviteLink}
-                        readOnly
-                        className="flex-1 bg-[#1B2B44] text-[#E5E9F0] rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#2DD4BF] border border-[#2B3B54]"
-                      />
-                      <button
-                        onClick={handleCopyLink}
-                        className="px-4 py-2 bg-[#2DD4BF] text-[#0A1628] rounded-lg hover:bg-[#14B8A6] flex items-center space-x-2 font-medium"
-                      >
-                        {copied ? (
-                          <FiCheck className="w-5 h-5" />
-                        ) : (
-                          <FiCopy className="w-5 h-5" />
-                        )}
-                      </button>
-                    </div>
-                  )}
+                  <button
+                    onClick={handleCopy}
+                    className="p-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    {copied ? <FiCheck className="w-5 h-5" /> : <FiCopy className="w-5 h-5" />}
+                  </button>
                 </div>
+
+                <p className="text-sm text-muted-foreground">
+                  Team members can join by going to /join and entering this code. They will join with {accessType} access.
+                </p>
               </div>
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   );
