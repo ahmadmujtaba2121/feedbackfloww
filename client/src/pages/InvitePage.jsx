@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { validateInvite } from '../services/inviteService';
 import { auth, db, isFirebaseInitialized, ensureFirebaseInitialized } from '../firebase/firebase';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
@@ -43,7 +43,7 @@ const ErrorScreen = ({ error, onRetry, onHome }) => (
 const InvitePage = () => {
   const { projectId, inviteId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
+  const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
 
@@ -52,25 +52,43 @@ const InvitePage = () => {
     let timeoutId = null;
 
     const processInvite = async () => {
+      // Prevent multiple processing attempts
+      if (isProcessing) return;
+      setIsProcessing(true);
+
       try {
-        // Ensure Firebase is initialized
-        if (!isFirebaseInitialized()) {
-          const initialized = ensureFirebaseInitialized();
-          if (!initialized) {
-            throw new Error('Failed to initialize Firebase');
-          }
+        console.log('Starting invite processing...', { projectId, inviteId });
+
+        // Wait for Firebase to initialize
+        let retryCount = 0;
+        while (!isFirebaseInitialized() && retryCount < 3) {
+          console.log('Waiting for Firebase initialization...', { retryCount });
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          ensureFirebaseInitialized();
+          retryCount++;
         }
 
-        // First validate the invite
+        if (!isFirebaseInitialized()) {
+          throw new Error('Firebase failed to initialize');
+        }
+
+        console.log('Firebase initialized, validating invite...');
+
+        // Validate the invite
         const result = await validateInvite(inviteId, projectId);
+        console.log('Invite validation result:', result);
 
-        if (!mounted) return;
+        if (!mounted) {
+          console.log('Component unmounted, stopping processing');
+          return;
+        }
 
-        // Check current auth state
+        // Get current user synchronously
         const user = auth.currentUser;
+        console.log('Current auth state:', { user: user?.email });
 
         if (user) {
-          // User is logged in, update invite and redirect
+          console.log('User is logged in, updating invite status...');
           try {
             const projectRef = doc(db, 'projects', projectId);
             await updateDoc(projectRef, {
@@ -81,18 +99,20 @@ const InvitePage = () => {
                 usedBy: user.email
               })
             });
+            console.log('Invite status updated successfully');
           } catch (updateError) {
             console.error('Error updating invite status:', updateError);
+            // Continue with navigation even if update fails
           }
 
-          // Navigate to appropriate page
           const path = result.inviteData.role === 'editor'
             ? `/project/${projectId}/canvas`
             : `/project/${projectId}`;
 
+          console.log('Navigating to:', path);
           navigate(path, { replace: true });
         } else {
-          // User is not logged in, redirect to sign in
+          console.log('User not logged in, redirecting to sign in...');
           const returnUrl = encodeURIComponent(`/invite/${projectId}/${inviteId}`);
           navigate(`/signin?redirect=${returnUrl}`, { replace: true });
         }
@@ -102,35 +122,47 @@ const InvitePage = () => {
           setError(error.message || 'Failed to process invite');
           setStatus('error');
         }
+      } finally {
+        if (mounted) {
+          setIsProcessing(false);
+        }
       }
     };
 
     // Set timeout for the entire process
     timeoutId = setTimeout(() => {
       if (mounted) {
+        console.log('Process timed out');
         setStatus('timeout');
       }
     }, TIMEOUT_DURATION);
 
-    // Start processing
-    processInvite();
+    // Start processing only if not already processing
+    if (!isProcessing) {
+      processInvite();
+    }
 
     return () => {
+      console.log('Cleaning up invite processing...');
       mounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [projectId, inviteId, navigate]);
+  }, [projectId, inviteId, navigate, isProcessing]);
 
   // Show appropriate UI based on status
   switch (status) {
     case 'loading':
-      return <LoadingScreen message="Processing invite..." />;
+      return <LoadingScreen message={isProcessing ? "Processing invite..." : "Initializing..."} />;
 
     case 'timeout':
       return (
         <ErrorScreen
           error="Connection timed out. Please check your internet connection and try again."
-          onRetry={() => window.location.reload()}
+          onRetry={() => {
+            setStatus('loading');
+            setIsProcessing(false);
+            window.location.reload();
+          }}
           onHome={() => navigate('/')}
         />
       );
@@ -139,7 +171,11 @@ const InvitePage = () => {
       return (
         <ErrorScreen
           error={error}
-          onRetry={() => window.location.reload()}
+          onRetry={() => {
+            setStatus('loading');
+            setIsProcessing(false);
+            window.location.reload();
+          }}
           onHome={() => navigate('/')}
         />
       );
