@@ -1,78 +1,64 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { validateInvite } from '../services/inviteService';
-import { auth, db } from '../firebase/firebase';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
+import { validateInvite, acceptInvite } from '../services/inviteService';
+import { toast } from 'react-hot-toast';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 const InvitePage = () => {
   const { projectId, inviteId } = useParams();
+  const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const checkInvite = async () => {
+    const processInvite = async () => {
       try {
-        // Simple validation
-        const { projectData, inviteData } = await validateInvite(inviteId, projectId);
+        if (!projectId || !inviteId) {
+          throw new Error('Invalid invite link');
+        }
 
-        // Check auth
-        if (!auth.currentUser) {
-          const returnUrl = encodeURIComponent(`/invite/${projectId}/${inviteId}`);
-          navigate(`/signin?redirect=${returnUrl}`);
+        // If user is not logged in, redirect to sign in
+        if (!currentUser) {
+          navigate(`/signin?redirect=/invite/${projectId}/${inviteId}`);
           return;
         }
 
-        // Update invite status
-        const projectRef = doc(db, 'projects', projectId);
-        await updateDoc(projectRef, {
-          invites: arrayUnion({
-            ...inviteData,
-            used: true,
-            usedAt: new Date().toISOString(),
-            usedBy: auth.currentUser.email
-          })
-        });
-
-        // Navigate based on role
-        const path = inviteData.role === 'editor'
-          ? `/project/${projectId}/canvas`
-          : `/project/${projectId}`;
-
-        navigate(path);
+        // Accept the invite
+        const { redirect } = await acceptInvite(projectId, inviteId, currentUser.email);
+        toast.success('Successfully joined the project!');
+        navigate(redirect, { replace: true });
       } catch (err) {
-        setError(err.message);
+        console.error('Error processing invite:', err);
+        setError(err.message || 'Failed to process invite');
+      } finally {
+        setLoading(false);
       }
     };
 
-    checkInvite();
-  }, [projectId, inviteId, navigate]);
+    processInvite();
+  }, [projectId, inviteId, currentUser, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
 
   if (error) {
     return (
       <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
-        <div className="text-center text-white">
-          <h1 className="text-2xl font-bold mb-4">Error</h1>
-          <p className="text-gray-400 mb-4">{error}</p>
-          <button
-            onClick={() => navigate('/')}
-            className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 transition-colors"
-          >
-            Go to Homepage
-          </button>
+        <div className="bg-red-500/10 text-red-400 p-4 rounded-lg border border-red-500/20">
+          {error}
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
-      <div className="text-center">
-        <LoadingSpinner />
-        <p className="text-white mt-4">Processing invite...</p>
-      </div>
-    </div>
-  );
+  return null;
 };
 
 export default InvitePage;  

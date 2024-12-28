@@ -1,44 +1,9 @@
-import { collection, doc, setDoc, serverTimestamp, getDoc, updateDoc, arrayUnion, getDocs, query, where } from 'firebase/firestore';
-import { db, ensureFirebaseInitialized, isFirebaseInitialized } from '../firebase/firebase';
+import { collection, doc, setDoc, serverTimestamp, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { db } from '../firebase/firebase';
 import { v4 as uuidv4 } from 'uuid';
 
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000;
-
-const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-const retryOperation = async (operation, retries = MAX_RETRIES, delay = RETRY_DELAY) => {
-  let lastError;
-
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
-      if (i < retries - 1) {
-        await wait(delay * (i + 1));
-      }
-    }
-  }
-
-  throw lastError;
-};
-
 export const validateInvite = async (inviteId, projectId) => {
-  if (!inviteId || !projectId) {
-    throw new Error('Invalid invite parameters');
-  }
-
-  // Ensure Firebase is initialized
-  if (!isFirebaseInitialized()) {
-    const initialized = ensureFirebaseInitialized();
-    if (!initialized) {
-      throw new Error('Failed to initialize Firebase');
-    }
-  }
-
   try {
-    // Direct query for the specific project
     const projectRef = doc(db, 'projects', projectId);
     const projectDoc = await getDoc(projectRef);
 
@@ -47,11 +12,6 @@ export const validateInvite = async (inviteId, projectId) => {
     }
 
     const projectData = projectDoc.data();
-
-    if (!projectData) {
-      throw new Error('Project data is corrupted');
-    }
-
     const invites = projectData.invites || [];
     const invite = invites.find(inv => inv.id === inviteId);
 
@@ -60,25 +20,18 @@ export const validateInvite = async (inviteId, projectId) => {
     }
 
     if (invite.used) {
-      throw new Error('Invite has already been used');
+      throw new Error('This invite has already been used');
     }
 
-    const currentTime = new Date();
-    const expiryTime = new Date(invite.expiresAt);
-
-    if (currentTime > expiryTime) {
-      throw new Error('Invite has expired');
-    }
-
-    if (invite.status !== 'active') {
-      throw new Error('Invite is no longer active');
+    const now = new Date();
+    const expiresAt = new Date(invite.expiresAt);
+    if (now > expiresAt) {
+      throw new Error('This invite has expired');
     }
 
     return {
       projectData: {
         id: projectDoc.id,
-        name: projectData.name,
-        ownerId: projectData.ownerId,
         ...projectData
       },
       inviteData: invite
@@ -90,14 +43,6 @@ export const validateInvite = async (inviteId, projectId) => {
 };
 
 export const createProjectInvite = async (projectId, creatorEmail, type = 'view') => {
-  // Ensure Firebase is initialized
-  if (!isFirebaseInitialized()) {
-    const initialized = ensureFirebaseInitialized();
-    if (!initialized) {
-      throw new Error('Failed to initialize Firebase');
-    }
-  }
-
   try {
     const projectRef = doc(db, 'projects', projectId);
     const projectDoc = await getDoc(projectRef);
@@ -137,67 +82,27 @@ export const createProjectInvite = async (projectId, creatorEmail, type = 'view'
 
 export const acceptInvite = async (projectId, inviteId, userEmail) => {
   try {
-    console.log('Accepting invite:', { projectId, inviteId, userEmail }); // Debug log
-
-    const projectRef = doc(db, 'projects', projectId);
-    const projectDoc = await getDoc(projectRef);
-
-    if (!projectDoc.exists()) {
-      throw new Error('Project not found');
-    }
-
-    const projectData = projectDoc.data();
-    console.log('Found project:', projectId); // Debug log
-
-    // Find the invite in the invites array
-    const invite = (projectData.invites || []).find(link => link.id === inviteId);
-
-    if (!invite) {
-      throw new Error('Invite not found');
-    }
-
-    console.log('Found invite:', invite); // Debug log
-
-    // Verify that the invite belongs to this project
-    if (invite.projectId !== projectId) {
-      throw new Error('Invalid project ID');
-    }
-
-    // Check if invite is expired
-    const now = new Date();
-    const expiresAt = new Date(invite.expiresAt);
-    if (now > expiresAt) {
-      throw new Error('Invite has expired');
-    }
-
-    // Check if invite is still active
-    if (invite.status !== 'active') {
-      throw new Error('Invite is no longer active');
-    }
-
-    // Check if invite has already been used
-    if (invite.used) {
-      throw new Error('This invite has already been used');
-    }
+    // First validate the invite
+    const { projectData, inviteData } = await validateInvite(inviteId, projectId);
 
     // Update invite to mark it as used
-    const updatedInvite = {
-      ...invite,
-      used: true,
-      usedBy: userEmail,
-      lastUsedAt: new Date().toISOString()
-    };
+    const projectRef = doc(db, 'projects', projectId);
 
     // Get current invites array
     const currentInvites = projectData.invites || [];
     // Remove the old invite and add the updated one
     const newInvites = [
       ...currentInvites.filter(i => i.id !== inviteId),
-      updatedInvite
+      {
+        ...inviteData,
+        used: true,
+        usedBy: userEmail,
+        usedAt: new Date().toISOString()
+      }
     ];
 
-    // Add user based on invite role
-    if (invite.role === 'editor') {
+    // Update project with new invites array and add user based on role
+    if (inviteData.role === 'editor') {
       await updateDoc(projectRef, {
         invites: newInvites,
         [`editors.${userEmail}`]: {
@@ -229,11 +134,10 @@ export const acceptInvite = async (projectId, inviteId, userEmail) => {
       });
     }
 
-    console.log('Successfully accepted invite'); // Debug log
-
     return {
-      redirect: `/project/${projectId}`,
-      type: invite.role === 'editor' ? 'team' : 'view'
+      redirect: inviteData.role === 'editor'
+        ? `/project/${projectId}/canvas`
+        : `/project/${projectId}`
     };
   } catch (error) {
     console.error('Error accepting invite:', error);
