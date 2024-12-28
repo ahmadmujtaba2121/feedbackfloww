@@ -1,5 +1,5 @@
-import React, { useState, useEffect, Suspense } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { validateInvite } from '../services/inviteService';
 import { auth, db, isFirebaseInitialized, ensureFirebaseInitialized } from '../firebase/firebase';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
@@ -43,16 +43,38 @@ const ErrorScreen = ({ error, onRetry, onHome }) => (
 const InvitePage = () => {
   const { projectId, inviteId } = useParams();
   const navigate = useNavigate();
-  const [status, setStatus] = useState('loading'); // loading, validating, error, timeout
+  const location = useLocation();
+  const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
   const [projectData, setProjectData] = useState(null);
 
+  // Check if this is an invite link
+  const isInviteLink = location.pathname.includes('/invite/');
+
   useEffect(() => {
+    // For normal access (not invite link), use simple auth check
+    if (!isInviteLink) {
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        if (!user) {
+          navigate('/signin', { replace: true });
+        }
+      });
+      return () => unsubscribe();
+    }
+
+    // For invite links, use the special loading flow
     let mounted = true;
     let timeoutId = null;
 
     const validateInviteLink = async () => {
       try {
+        if (!isFirebaseInitialized()) {
+          const initialized = ensureFirebaseInitialized();
+          if (!initialized) {
+            throw new Error('Failed to initialize Firebase');
+          }
+        }
+
         // First validate the invite without auth
         const result = await validateInvite(inviteId, projectId);
         if (!mounted) return;
@@ -65,7 +87,6 @@ const InvitePage = () => {
           if (!mounted) return;
 
           if (user) {
-            // User is logged in, update invite and redirect
             try {
               const projectRef = doc(db, 'projects', projectId);
               await updateDoc(projectRef, {
@@ -80,20 +101,17 @@ const InvitePage = () => {
               console.error('Error updating invite status:', updateError);
             }
 
-            // Navigate regardless of update success
             const path = result.inviteData.role === 'editor'
               ? `/project/${projectId}/canvas`
               : `/project/${projectId}`;
 
             navigate(path, { replace: true });
           } else {
-            // User is not logged in, show sign in
             const returnUrl = encodeURIComponent(`/invite/${projectId}/${inviteId}`);
             navigate(`/signin?redirect=${returnUrl}`, { replace: true });
           }
         });
 
-        // Cleanup auth listener
         return () => unsubscribe();
       } catch (error) {
         console.error('Invite validation error:', error);
@@ -104,23 +122,32 @@ const InvitePage = () => {
       }
     };
 
-    // Set timeout for the entire process
-    timeoutId = setTimeout(() => {
-      if (mounted) {
-        setStatus('timeout');
-      }
-    }, TIMEOUT_DURATION);
+    if (isInviteLink) {
+      timeoutId = setTimeout(() => {
+        if (mounted) {
+          setStatus('timeout');
+        }
+      }, TIMEOUT_DURATION);
 
-    // Start the validation process
-    validateInviteLink();
+      validateInviteLink();
+    }
 
     return () => {
       mounted = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [projectId, inviteId, navigate]);
+  }, [projectId, inviteId, navigate, isInviteLink, location.pathname]);
 
-  // Show appropriate UI based on status
+  // For non-invite access, show simple loading
+  if (!isInviteLink) {
+    return (
+      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  // For invite links, show appropriate UI based on status
   switch (status) {
     case 'loading':
       return <LoadingScreen message="Loading invite details..." />;
