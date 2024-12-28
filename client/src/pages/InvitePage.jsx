@@ -13,37 +13,65 @@ const InvitePage = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    console.log('InvitePage mounted with:', {
+      projectId,
+      inviteId,
+      hasCurrentUser: !!currentUser,
+      currentUserEmail: currentUser?.email
+    });
+
     const processInvite = async () => {
       try {
+        console.log('Starting invite process...');
+
         if (!projectId || !inviteId) {
+          console.error('Missing projectId or inviteId');
           throw new Error('Invalid invite link');
         }
 
         // If user is not logged in, redirect to sign in
         if (!currentUser) {
-          navigate(`/signin?redirect=/invite/${projectId}/${inviteId}`);
+          console.log('User not logged in, redirecting to signin...');
+          const redirectPath = `/signin?redirect=/invite/${projectId}/${inviteId}`;
+          console.log('Redirect path:', redirectPath);
+          navigate(redirectPath);
           return;
         }
 
+        console.log('User logged in, accepting invite...');
         // Accept the invite
         const { redirect } = await acceptInvite(projectId, inviteId, currentUser.email);
+        console.log('Invite accepted, redirecting to:', redirect);
+
         toast.success('Successfully joined the project!');
         navigate(redirect, { replace: true });
       } catch (err) {
         console.error('Error processing invite:', err);
         setError(err.message || 'Failed to process invite');
       } finally {
+        console.log('Setting loading to false');
         setLoading(false);
       }
     };
 
     processInvite();
+
+    return () => {
+      console.log('InvitePage unmounting');
+    };
   }, [projectId, inviteId, currentUser, navigate]);
+
+  console.log('Rendering InvitePage with state:', { loading, error });
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
-        <LoadingSpinner />
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-white mt-4">
+            {currentUser ? 'Processing invite...' : 'Checking authentication...'}
+          </p>
+        </div>
       </div>
     );
   }
