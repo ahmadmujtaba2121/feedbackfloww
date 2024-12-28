@@ -11,102 +11,100 @@ const InvitePage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const MAX_RETRIES = 3;
+  const [authChecked, setAuthChecked] = useState(false);
+  const [user, setUser] = useState(null);
 
+  // First effect: Handle auth state
   useEffect(() => {
-    let mounted = true;
-    let retryTimeout;
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setUser(user);
+      setAuthChecked(true);
+    });
 
-    const validateAndRedirect = async () => {
+    return () => unsubscribe();
+  }, []);
+
+  // Second effect: Handle invite validation and navigation
+  useEffect(() => {
+    if (!authChecked) return; // Wait for auth check to complete
+
+    let mounted = true;
+
+    const processInvite = async () => {
       try {
-        if (!mounted) return;
         setLoading(true);
         setError(null);
 
-        // Wait for auth state to be determined
-        await new Promise((resolve) => {
-          const unsubscribe = auth.onAuthStateChanged((user) => {
-            unsubscribe();
-            resolve(user);
-          });
-        });
-
-        // Check if Firebase is initialized
-        if (!db) {
-          throw new Error('Database not initialized');
-        }
-
-        const { projectData, inviteData } = await validateInvite(inviteId, projectId);
-
-        if (!mounted) return;
-
-        // If user is not logged in, redirect to sign in
-        if (!auth.currentUser) {
+        // If not logged in, redirect to sign in
+        if (!user) {
           const returnUrl = encodeURIComponent(`/invite/${projectId}/${inviteId}`);
           navigate(`/signin?redirect=${returnUrl}`);
           return;
         }
 
-        // Update invite status first
-        const projectRef = doc(db, 'projects', projectId);
-        await updateDoc(projectRef, {
-          'invites': arrayUnion({
-            ...inviteData,
-            used: true,
-            usedAt: new Date().toISOString(),
-            usedBy: auth.currentUser?.email || 'anonymous'
-          })
-        });
-
-        // Then navigate based on role
-        if (inviteData.role === 'editor') {
-          navigate(`/project/${projectId}/canvas`, { replace: true });
-        } else {
-          navigate(`/project/${projectId}`, { replace: true });
-        }
-
-      } catch (error) {
-        console.error('Invite validation error:', error);
+        // Validate the invite
+        const { projectData, inviteData } = await validateInvite(inviteId, projectId);
 
         if (!mounted) return;
 
-        if (retryCount < MAX_RETRIES &&
-          (error.message.includes('not initialized') ||
-            error.message.includes('database connection'))) {
-          setRetryCount(prev => prev + 1);
-          retryTimeout = setTimeout(validateAndRedirect, 1500 * (retryCount + 1));
-        } else {
+        try {
+          // Update invite status
+          const projectRef = doc(db, 'projects', projectId);
+          await updateDoc(projectRef, {
+            invites: arrayUnion({
+              ...inviteData,
+              used: true,
+              usedAt: new Date().toISOString(),
+              usedBy: user.email
+            })
+          });
+
+          // Navigate based on role
+          const path = inviteData.role === 'editor'
+            ? `/project/${projectId}/canvas`
+            : `/project/${projectId}`;
+
+          navigate(path, { replace: true });
+        } catch (updateError) {
+          console.error('Error updating invite status:', updateError);
+          // Still navigate even if update fails
+          const path = inviteData.role === 'editor'
+            ? `/project/${projectId}/canvas`
+            : `/project/${projectId}`;
+
+          navigate(path, { replace: true });
+        }
+      } catch (error) {
+        console.error('Invite processing error:', error);
+        if (mounted) {
           setError(error.message);
           setLoading(false);
         }
       }
     };
 
-    validateAndRedirect();
+    processInvite();
 
     return () => {
       mounted = false;
-      if (retryTimeout) clearTimeout(retryTimeout);
     };
-  }, [projectId, inviteId, navigate, retryCount]);
+  }, [projectId, inviteId, navigate, authChecked, user]);
 
-  if (loading) {
+  // Show loading state while checking auth
+  if (!authChecked || loading) {
     return (
       <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-white mt-4">Validating invite link...</p>
-          {retryCount > 0 && (
-            <p className="text-gray-400 mt-2">
-              Initializing... ({retryCount}/{MAX_RETRIES})
-            </p>
-          )}
+          <p className="text-white mt-4">
+            {!authChecked ? "Checking authentication..." : "Validating invite link..."}
+          </p>
         </div>
       </div>
     );
   }
 
+  // Show error state
   if (error) {
     return (
       <div className="min-h-screen bg-[#080C14] flex items-center justify-center">

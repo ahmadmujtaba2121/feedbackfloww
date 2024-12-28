@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator, collection, getDocs } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -14,19 +14,16 @@ const firebaseConfig = {
   databaseURL: "https://feedbackflow-ae91d-default-rtdb.firebaseio.com"
 };
 
-// Initialize Firebase
 let app;
-let db;
 let auth;
+let db;
 let storage;
 
-const initializeFirebase = async () => {
+const initializeFirebase = () => {
   try {
     if (!getApps().length) {
-      console.log('Initializing new Firebase app...');
       app = initializeApp(firebaseConfig);
     } else {
-      console.log('Using existing Firebase app');
       app = getApps()[0];
     }
 
@@ -34,56 +31,35 @@ const initializeFirebase = async () => {
     db = getFirestore(app);
     storage = getStorage(app);
 
-    // Test collection access
-    try {
-      console.log('Testing Firestore collection access...');
-      const projectsRef = collection(db, 'projects');
-      const snapshot = await getDocs(projectsRef);
-      console.log('Successfully accessed projects collection. Found', snapshot.size, 'documents');
-    } catch (collectionError) {
-      console.error('Failed to access projects collection:', collectionError);
-      // Don't throw, just log the error
-    }
-
     // Set Firestore settings for better reliability
-    const settings = {
+    db.settings({
       experimentalForceLongPolling: true,
       experimentalAutoDetectLongPolling: true,
-      useFetchStreams: false,
       cacheSizeBytes: 1048576 // 1MB
-    };
+    });
 
-    console.log('Firebase services initialized successfully');
     return true;
   } catch (error) {
-    console.error('Firebase initialization error:', {
-      message: error.message,
-      code: error.code,
-      stack: error.stack
-    });
+    console.error('Firebase initialization error:', error);
     return false;
   }
 };
 
-// Initialize Firebase with retries
-const initializeWithRetry = async (retries = 3) => {
-  for (let i = 0; i < retries; i++) {
-    const success = await initializeFirebase();
-    if (success) {
-      return true;
-    }
-    console.log(`Initialization attempt ${i + 1} failed, retrying...`);
-    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+// Initialize Firebase immediately
+initializeFirebase();
+
+// Export initialized instances
+export { app, auth, db, storage };
+
+// Export initialization function for explicit initialization
+export const ensureFirebaseInitialized = () => {
+  if (!app || !auth || !db || !storage) {
+    return initializeFirebase();
   }
-  return false;
+  return true;
 };
 
-// Initialize immediately
-initializeWithRetry().then(success => {
-  if (!success) {
-    console.error('Failed to initialize Firebase after retries');
-  }
-});
-
-export { app, auth, db, storage };
-export default app;
+// Export a function to check if Firebase is initialized
+export const isFirebaseInitialized = () => {
+  return !!(app && auth && db && storage);
+};
