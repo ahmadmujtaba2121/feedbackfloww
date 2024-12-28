@@ -20,11 +20,7 @@ const Dashboard = () => {
       try {
         const q = query(
           collection(db, 'projects'),
-          where('members', 'array-contains', {
-            email: currentUser.email,
-            role: 'owner',
-            status: 'active'
-          })
+          where('members', 'array-contains', { email: currentUser.email })
         );
         const querySnapshot = await getDocs(q);
         const projectsData = querySnapshot.docs.map(doc => ({
