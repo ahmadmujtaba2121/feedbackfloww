@@ -4,57 +4,13 @@
     "installCommand": "npm install",
     "outputDirectory": "dist",
     "framework": "vite",
-    "routes": [
-        {
-            "src": "/invite/:projectId/:inviteId",
-            "dest": "/index.html"
-        },
-        {
-            "src": "/project/:projectId",
-            "dest": "/index.html"
-        },
-        {
-            "src": "/assets/(.*)",
-            "dest": "/assets/$1"
-        },
-        {
-            "src": "/favicon.ico",
-            "dest": "/favicon.ico"
-        },
-        {
-            "src": "/manifest.json",
-            "dest": "/manifest.json"
-        },
-        {
-            "src": "/logo-.*\\.svg",
-            "dest": "/$0"
-        },
-        {
-            "src": "/fonts/(.*)",
-            "dest": "/fonts/$1"
-        },
-        {
-            "src": "/(.*)\\.(?:js|css|svg|jpg|jpeg|png|gif|ico|woff2)$",
-            "dest": "/$1.$2",
-            "headers": {
-                "cache-control": "public, max-age=31536000, immutable"
-            }
-        },
-        {
-            "handle": "filesystem"
-        },
-        {
-            "src": "/(.*)",
-            "dest": "/index.html"
-        }
-    ],
     "rewrites": [
         {
             "source": "/invite/:projectId/:inviteId",
             "destination": "/index.html"
         },
         {
-            "source": "/project/:projectId",
+            "source": "/project/:projectId/:path*",
             "destination": "/index.html"
         },
         {
@@ -62,8 +18,6 @@
             "destination": "/index.html"
         }
     ],
-    "cleanUrls": true,
-    "trailingSlash": false,
     "headers": [
         {
             "source": "/(.*)",
@@ -79,6 +33,10 @@
                 {
                     "key": "X-XSS-Protection",
                     "value": "1; mode=block"
+                },
+                {
+                    "key": "Cache-Control",
+                    "value": "no-store, no-cache, must-revalidate"
                 }
             ]
         }

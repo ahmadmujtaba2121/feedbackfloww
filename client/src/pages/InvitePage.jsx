@@ -1,140 +1,104 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { validateInvite, acceptInvite } from '../services/inviteService';
+import { useParams, useNavigate } from 'react-router-dom';
+import { validateInvite } from '../services/inviteService';
+import { auth, db } from '../firebase/firebase';
+import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 const InvitePage = () => {
   const { projectId, inviteId } = useParams();
-  const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [validatingInvite, setValidatingInvite] = useState(true);
-  const [inviteValid, setInviteValid] = useState(false);
-  const [actualProjectId, setActualProjectId] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 3;
 
   useEffect(() => {
-    console.log('InvitePage mounted with:', { projectId, inviteId, currentUser: !!currentUser });
-  }, [projectId, inviteId, currentUser]);
+    let mounted = true;
+    let retryTimeout;
 
-  // First, validate the invite without requiring authentication
-  useEffect(() => {
-    const validateInviteOnly = async () => {
+    const validateAndRedirect = async () => {
       try {
-        if (!projectId || !inviteId) {
-          console.log('Missing required parameters:', { projectId, inviteId });
-          throw new Error('Invalid invite link');
+        setLoading(true);
+        setError(null);
+
+        // Check if Firebase is initialized
+        if (!db) {
+          throw new Error('Database not initialized');
         }
 
-        // Clean the inviteId in case it has any extra text
-        const cleanInviteId = inviteId.split('activity')[0]; // Remove any trailing text
-        console.log('Cleaned invite ID:', cleanInviteId);
+        const { projectData, inviteData } = await validateInvite(inviteId, projectId);
 
-        // First validate the invite
-        console.log('Starting invite validation...');
-        const validationResult = await validateInvite(cleanInviteId, projectId);
-        console.log('Validation result:', validationResult);
+        if (!mounted) return;
 
-        if (!validationResult.isValid) {
-          throw new Error('Invalid or expired invite');
+        if (inviteData.role === 'editor') {
+          navigate(`/project/${projectId}/canvas`);
+        } else {
+          navigate(`/project/${projectId}`);
         }
 
-        setActualProjectId(validationResult.projectId);
-        setInviteValid(true);
-        console.log('Invite validated successfully');
-      } catch (err) {
-        console.error('Validation error:', err);
-        setError(err.message || 'Failed to validate invite');
-        toast.error(err.message || 'Failed to validate invite');
-      } finally {
-        setValidatingInvite(false);
+        // Update invite status
+        const projectRef = doc(db, 'projects', projectId);
+        await updateDoc(projectRef, {
+          'invites': arrayUnion({
+            ...inviteData,
+            used: true,
+            usedAt: new Date().toISOString(),
+            usedBy: auth.currentUser?.email || 'anonymous'
+          })
+        });
+
+      } catch (error) {
+        console.error('Invite validation error:', error);
+
+        if (!mounted) return;
+
+        if (retryCount < MAX_RETRIES && error.message.includes('not initialized')) {
+          setRetryCount(prev => prev + 1);
+          retryTimeout = setTimeout(validateAndRedirect, 1000 * (retryCount + 1));
+        } else {
+          setError(error.message);
+          setLoading(false);
+        }
       }
     };
 
-    validateInviteOnly();
-  }, [projectId, inviteId]);
+    validateAndRedirect();
 
-  // Then, handle the authentication and acceptance flow
-  useEffect(() => {
-    const processInvite = async () => {
-      try {
-        if (!inviteValid || !actualProjectId) {
-          console.log('Not ready to process invite:', { inviteValid, actualProjectId });
-          return;
-        }
-
-        const cleanInviteId = inviteId.split('activity')[0];
-        console.log('Processing invite:', { cleanInviteId, actualProjectId });
-
-        // If user is not logged in, redirect to sign in
-        if (!currentUser) {
-          const returnUrl = encodeURIComponent(`/invite/${actualProjectId}/${cleanInviteId}`);
-          console.log('Redirecting to sign in:', returnUrl);
-          navigate(`/signin?redirect=${returnUrl}`);
-          return;
-        }
-
-        // Accept the invite
-        console.log('Accepting invite...');
-        const { redirect, type } = await acceptInvite(actualProjectId, cleanInviteId, currentUser.email);
-        console.log('Invite accepted:', { redirect, type });
-
-        toast.success(`Successfully joined the project as ${type === 'team' ? 'a team member' : 'a viewer'}!`);
-        navigate(redirect, { replace: true });
-      } catch (err) {
-        console.error('Processing error:', err);
-        setError(err.message || 'Failed to process invite');
-        toast.error(err.message || 'Failed to process invite');
-      } finally {
-        setLoading(false);
-      }
+    return () => {
+      mounted = false;
+      if (retryTimeout) clearTimeout(retryTimeout);
     };
+  }, [projectId, inviteId, navigate, retryCount]);
 
-    processInvite();
-  }, [projectId, inviteId, currentUser, navigate, inviteValid, actualProjectId]);
-
-  if (validatingInvite || loading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
-        <LoadingSpinner />
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-white mt-4">Validating invite link...</p>
+          {retryCount > 0 && (
+            <p className="text-gray-400 mt-2">Retrying... ({retryCount}/{MAX_RETRIES})</p>
+          )}
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#080C14] flex flex-col items-center justify-center gap-4">
-        <div className="bg-red-500/10 text-red-400 p-4 rounded-lg border border-red-500/20">
-          {error}
+      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
+        <div className="text-center text-white">
+          <h1 className="text-2xl font-bold mb-4">Invalid Invite Link</h1>
+          <p className="text-gray-400 mb-4">{error}</p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+          >
+            Go to Homepage
+          </button>
         </div>
-        <button
-          onClick={() => navigate('/')}
-          className="px-4 py-2 bg-[#1B2B44] text-[#E5E9F0] rounded-lg hover:bg-[#2B3B54] transition-colors"
-        >
-          Return to Home
-        </button>
-      </div>
-    );
-  }
-
-  if (inviteValid && !currentUser) {
-    return (
-      <div className="min-h-screen bg-[#080C14] flex flex-col items-center justify-center gap-4">
-        <div className="bg-blue-500/10 text-blue-400 p-4 rounded-lg border border-blue-500/20">
-          Please sign in to accept the invitation
-        </div>
-        <button
-          onClick={() => {
-            const returnUrl = encodeURIComponent(`/invite/${actualProjectId}/${inviteId.split('activity')[0]}`);
-            navigate(`/signin?redirect=${returnUrl}`);
-          }}
-          className="px-4 py-2 bg-[#1B2B44] text-[#E5E9F0] rounded-lg hover:bg-[#2B3B54] transition-colors"
-        >
-          Sign In
-        </button>
       </div>
     );
   }

@@ -22,7 +22,6 @@ export const createProjectInvite = async (projectId, creatorEmail, type = 'view'
       role: type === 'view' ? 'viewer' : 'editor'
     };
 
-    // Store the full invite object in the invites array
     await updateDoc(projectRef, {
       invites: arrayUnion(invite),
       activityLog: arrayUnion({
@@ -34,13 +33,7 @@ export const createProjectInvite = async (projectId, creatorEmail, type = 'view'
     });
 
     const inviteLink = `${window.location.origin}/invite/${projectId}/${invite.id}`;
-
-    console.log('Created invite:', { projectId, inviteId: invite.id }); // Debug log
-
-    return {
-      inviteId: invite.id,
-      inviteLink
-    };
+    return { inviteId: invite.id, inviteLink };
   } catch (error) {
     console.error('Error creating invite:', error);
     throw error;
@@ -49,96 +42,47 @@ export const createProjectInvite = async (projectId, creatorEmail, type = 'view'
 
 export const validateInvite = async (inviteId, projectId) => {
   try {
-    console.log('Starting invite validation:', { projectId, inviteId });
-
-    // Check if Firestore is initialized
     if (!db) {
-      console.error('Firestore not initialized');
       throw new Error('Database connection error');
     }
 
-    // First try to get all projects to verify collection access
-    try {
-      console.log('Testing collection access...');
-      const projectsRef = collection(db, 'projects');
-      const projectsSnapshot = await getDocs(projectsRef);
-      console.log('Collection access successful, found', projectsSnapshot.size, 'projects');
+    // Direct query for the specific project
+    const projectRef = doc(db, 'projects', projectId);
+    const projectDoc = await getDoc(projectRef);
 
-      // Look for the project in the collection
-      let projectDoc = null;
-      projectsSnapshot.forEach(doc => {
-        if (doc.id === projectId) {
-          projectDoc = doc;
-          console.log('Found project in collection:', doc.id);
-        }
-      });
-
-      if (!projectDoc) {
-        console.log('Project not found in collection. Available projects:',
-          projectsSnapshot.docs.map(d => d.id));
-        throw new Error('Project not found');
-      }
-
-      const projectData = projectDoc.data();
-      console.log('Project data retrieved:', {
-        id: projectDoc.id,
-        invitesCount: projectData.invites?.length || 0,
-        hasInvites: !!projectData.invites
-      });
-
-      // Find the invite
-      const invites = projectData.invites || [];
-      console.log(`Searching for invite ${inviteId} in ${invites.length} invites`);
-
-      const invite = invites.find(link => link.id === inviteId);
-      if (!invite) {
-        console.log('Available invites:', invites.map(i => ({ id: i.id, role: i.role })));
-        throw new Error('Invite not found');
-      }
-
-      console.log('Found invite:', {
-        id: invite.id,
-        projectId: invite.projectId,
-        role: invite.role,
-        status: invite.status,
-        createdAt: invite.createdAt
-      });
-
-      // Validate invite
-      const now = new Date();
-      const expiresAt = new Date(invite.expiresAt);
-
-      if (now > expiresAt) {
-        throw new Error('Invite has expired');
-      }
-
-      if (invite.status !== 'active') {
-        throw new Error('Invite is no longer active');
-      }
-
-      // Return validation result
-      const result = {
-        isValid: true,
-        type: invite.role === 'editor' ? 'team' : 'view',
-        projectId: projectDoc.id
-      };
-
-      console.log('Validation successful:', result);
-      return result;
-
-    } catch (error) {
-      console.error('Error accessing collection:', error);
-      throw new Error('Failed to access project data: ' + error.message);
+    if (!projectDoc.exists()) {
+      throw new Error('Project not found');
     }
 
+    const projectData = projectDoc.data();
+    const invites = projectData.invites || [];
+
+    const invite = invites.find(inv => inv.id === inviteId);
+
+    if (!invite) {
+      throw new Error('Invite not found');
+    }
+
+    if (invite.used) {
+      throw new Error('Invite has already been used');
+    }
+
+    const currentTime = new Date();
+    const expiryTime = new Date(invite.expiresAt);
+
+    if (currentTime > expiryTime) {
+      throw new Error('Invite has expired');
+    }
+
+    return {
+      projectData: {
+        id: projectDoc.id,
+        ...projectData
+      },
+      inviteData: invite
+    };
   } catch (error) {
-    console.error('Validation error details:', {
-      error: error.message,
-      code: error.code,
-      stack: error.stack,
-      projectId,
-      inviteId
-    });
+    console.error('Error validating invite:', error);
     throw error;
   }
 };
