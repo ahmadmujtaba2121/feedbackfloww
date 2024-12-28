@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { validateInvite, acceptInvite } from '../services/inviteService';
 import { toast } from 'react-hot-toast';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { FiArrowLeft } from 'react-icons/fi';
 
 const InvitePage = () => {
   const { projectId, inviteId } = useParams();
@@ -11,91 +12,82 @@ const InvitePage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [inviteProcessed, setInviteProcessed] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-
     const processInvite = async () => {
-      // Don't process if already done or if auth is still loading
-      if (inviteProcessed || authLoading) return;
+      if (!projectId || !inviteId) {
+        setError('Invalid invite link');
+        setLoading(false);
+        return;
+      }
 
       try {
-        console.log('Processing invite:', {
-          projectId,
-          inviteId,
-          hasUser: !!currentUser,
-          userEmail: currentUser?.email
-        });
+        // If auth is still loading, wait
+        if (authLoading) return;
 
-        if (!projectId || !inviteId) {
-          throw new Error('Invalid invite link');
-        }
-
+        // If no user, redirect to sign in
         if (!currentUser) {
-          console.log('No user, redirecting to signin');
-          const redirectPath = `/signin?redirect=/invite/${projectId}/${inviteId}`;
-          navigate(redirectPath);
+          const redirectUrl = `/signin?redirect=/invite/${projectId}/${inviteId}`;
+          navigate(redirectUrl);
           return;
         }
 
-        // Accept the invite
+        // Validate the invite first
+        const invite = await validateInvite(projectId, inviteId);
+
+        // If invite is valid, accept it
         const { redirect } = await acceptInvite(projectId, inviteId, currentUser.email);
 
-        if (mounted) {
-          setInviteProcessed(true);
-          toast.success('Successfully joined the project!');
-          navigate(redirect, { replace: true });
-        }
+        // Show success message
+        toast.success(`Successfully joined the project as ${invite.role || 'viewer'}`);
+
+        // Navigate to the project
+        navigate(redirect, { replace: true });
       } catch (err) {
-        console.error('Invite error:', err);
-        if (mounted) {
-          setError(err.message || 'Failed to process invite');
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        console.error('Error processing invite:', err);
+        setError(err.message || 'Failed to process invite');
+        setLoading(false);
       }
     };
 
     processInvite();
+  }, [projectId, inviteId, currentUser, authLoading, navigate]);
 
-    return () => {
-      mounted = false;
-    };
-  }, [projectId, inviteId, currentUser, authLoading, navigate, inviteProcessed]);
-
-  // Show loading while auth is initializing
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-white mt-4">Checking authentication...</p>
+          <p className="text-muted-foreground mt-4">Checking authentication...</p>
         </div>
       </div>
     );
   }
 
-  // Show loading while processing invite
   if (loading && !error) {
     return (
-      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <LoadingSpinner />
-          <p className="text-white mt-4">Processing invite...</p>
+          <p className="text-muted-foreground mt-4">Processing invite...</p>
         </div>
       </div>
     );
   }
 
-  // Show error if any
   if (error) {
     return (
-      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
-        <div className="bg-red-500/10 text-red-400 p-4 rounded-lg border border-red-500/20">
-          {error}
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-foreground rounded-lg shadow-xl p-6 text-center border border-border">
+          <h1 className="text-2xl font-bold text-primary mb-4">Invalid Invite</h1>
+          <p className="text-muted-foreground mb-6">{error}</p>
+          <Link
+            to="/"
+            className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <FiArrowLeft className="mr-2" />
+            Return Home
+          </Link>
         </div>
       </div>
     );
