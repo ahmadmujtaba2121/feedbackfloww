@@ -1,8 +1,8 @@
-import React, { Suspense } from 'react';
+import React from 'react';
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { HelmetProvider } from 'react-helmet-async';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { AIProvider } from './contexts/AIContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -44,14 +44,26 @@ const App = () => {
 
 const AppContent = () => {
   const location = useLocation();
+  const { loading: authLoading } = useAuth();
   const isCanvasPage = location.pathname.includes('/canvas');
   const isInvitePath = location.pathname.includes('/invite/');
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner />
+          <p className="text-white mt-4">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#080C14]">
       <Toaster position="top-right" />
       {!isCanvasPage && !isInvitePath && <Navigation />}
-      <Suspense fallback={<LoadingSpinner />}>
+      <React.Suspense fallback={<LoadingSpinner />}>
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<HomePage />} />
@@ -84,7 +96,7 @@ const AppContent = () => {
           {/* Catch all route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Suspense>
+      </React.Suspense>
     </div>
   );
 };

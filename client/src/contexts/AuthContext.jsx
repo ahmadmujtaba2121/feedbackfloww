@@ -24,27 +24,16 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    let mounted = true;
-    console.log('AuthProvider: Setting up auth state listener');
-
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('AuthProvider: Auth state changed:', { hasUser: !!user, userEmail: user?.email });
-      if (mounted) {
-        setCurrentUser(user);
-        setLoading(false);
-      }
+      setCurrentUser(user);
+      setLoading(false);
     }, (error) => {
-      console.error('AuthProvider: Auth state error:', error);
-      if (mounted) {
-        setError(error);
-        setLoading(false);
-      }
+      console.error('Auth state error:', error);
+      setError(error);
+      setLoading(false);
     });
 
-    return () => {
-      mounted = false;
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const signup = async (email, password, displayName) => {
@@ -85,18 +74,6 @@ export function AuthProvider({ children }) {
     login,
     logout
   };
-
-  // Render a loading state while auth is initializing
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-white mt-4">Initializing...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <AuthContext.Provider value={value}>
