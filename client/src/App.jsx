@@ -25,6 +25,7 @@ const AIPage = React.lazy(() => import('./pages/AIPage'));
 const InvitePage = React.lazy(() => import('./pages/InvitePage'));
 const AIAssistant = React.lazy(() => import('./pages/AIAssistant'));
 const UserGuidePage = React.lazy(() => import('./pages/UserGuidePage'));
+const JoinProject = React.lazy(() => import('./pages/JoinProject'));
 
 const LoadingFallback = () => (
   <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
@@ -91,6 +92,7 @@ const AppContent = () => {
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/join" element={<JoinProject />} />
 
           {/* Protected routes */}
           <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
@@ -104,12 +106,6 @@ const AppContent = () => {
           <Route path="/project/:projectId/kanban" element={<PrivateRoute><KanbanPage /></PrivateRoute>} />
           <Route path="/project/:projectId/calendar" element={<PrivateRoute><CalendarPage /></PrivateRoute>} />
           <Route path="/project/:projectId/ai-assistant" element={<PrivateRoute><AIAssistant /></PrivateRoute>} />
-
-          {/* Invite routes */}
-          <Route path="/invite/:projectId/:inviteId" element={<InvitePage />} />
-          <Route path="/invite/:projectId/:inviteId/canvas" element={<PrivateRoute><CanvasPage isInviteLink={true} /></PrivateRoute>} />
-          <Route path="/invite/:projectId/:inviteId/kanban" element={<PrivateRoute><KanbanPage isInviteLink={true} /></PrivateRoute>} />
-          <Route path="/invite/:projectId/:inviteId/calendar" element={<PrivateRoute><CalendarPage isInviteLink={true} /></PrivateRoute>} />
 
           {/* User guide route */}
           <Route path="/guide" element={<PrivateRoute><UserGuidePage /></PrivateRoute>} />
