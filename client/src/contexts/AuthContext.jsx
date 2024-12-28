@@ -22,18 +22,49 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+    let authTimeout;
+
+    // Set a timeout to prevent infinite loading
+    authTimeout = setTimeout(() => {
+      if (mounted && loading) {
+        setLoading(false);
+        setInitialized(true);
+        console.log('Auth initialization timed out');
+      }
+    }, 5000);
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      setLoading(false);
+      if (mounted) {
+        setCurrentUser(user);
+        setLoading(false);
+        setInitialized(true);
+        if (authTimeout) {
+          clearTimeout(authTimeout);
+        }
+      }
     }, (error) => {
       console.error('Auth state error:', error);
-      setError(error);
-      setLoading(false);
+      if (mounted) {
+        setError(error);
+        setLoading(false);
+        setInitialized(true);
+        if (authTimeout) {
+          clearTimeout(authTimeout);
+        }
+      }
     });
 
-    return () => unsubscribe();
+    return () => {
+      mounted = false;
+      if (authTimeout) {
+        clearTimeout(authTimeout);
+      }
+      unsubscribe();
+    };
   }, []);
 
   const signup = async (email, password, displayName) => {
@@ -70,6 +101,7 @@ export function AuthProvider({ children }) {
     currentUser,
     loading,
     error,
+    initialized,
     signup,
     login,
     logout

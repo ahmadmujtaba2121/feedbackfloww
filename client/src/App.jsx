@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { HelmetProvider } from 'react-helmet-async';
@@ -26,17 +26,28 @@ const InvitePage = React.lazy(() => import('./pages/InvitePage'));
 const AIAssistant = React.lazy(() => import('./pages/AIAssistant'));
 const UserGuidePage = React.lazy(() => import('./pages/UserGuidePage'));
 
+const LoadingFallback = () => (
+  <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
+    <div className="text-center">
+      <LoadingSpinner />
+      <p className="text-white mt-4">Loading...</p>
+    </div>
+  </div>
+);
+
 const App = () => {
   return (
     <HelmetProvider>
       <ThemeProvider>
-        <AuthProvider>
-          <NotificationProvider>
-            <AIProvider>
-              <AppContent />
-            </AIProvider>
-          </NotificationProvider>
-        </AuthProvider>
+        <Suspense fallback={<LoadingFallback />}>
+          <AuthProvider>
+            <NotificationProvider>
+              <AIProvider>
+                <AppContent />
+              </AIProvider>
+            </NotificationProvider>
+          </AuthProvider>
+        </Suspense>
       </ThemeProvider>
     </HelmetProvider>
   );
@@ -44,26 +55,36 @@ const App = () => {
 
 const AppContent = () => {
   const location = useLocation();
-  const { loading: authLoading } = useAuth();
+  const { currentUser, loading: authLoading } = useAuth();
+  const [appReady, setAppReady] = useState(false);
   const isCanvasPage = location.pathname.includes('/canvas');
   const isInvitePath = location.pathname.includes('/invite/');
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner />
-          <p className="text-white mt-4">Loading...</p>
-        </div>
-      </div>
-    );
+  useEffect(() => {
+    // Set app as ready after a short delay if auth is still loading
+    const timeout = setTimeout(() => {
+      if (authLoading) {
+        setAppReady(true);
+      }
+    }, 2000);
+
+    // If auth finishes loading, set app as ready immediately
+    if (!authLoading) {
+      setAppReady(true);
+    }
+
+    return () => clearTimeout(timeout);
+  }, [authLoading]);
+
+  if (!appReady) {
+    return <LoadingFallback />;
   }
 
   return (
     <div className="min-h-screen bg-[#080C14]">
       <Toaster position="top-right" />
       {!isCanvasPage && !isInvitePath && <Navigation />}
-      <React.Suspense fallback={<LoadingSpinner />}>
+      <Suspense fallback={<LoadingFallback />}>
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<HomePage />} />
@@ -96,7 +117,7 @@ const AppContent = () => {
           {/* Catch all route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </React.Suspense>
+      </Suspense>
     </div>
   );
 };
