@@ -5,7 +5,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import { FiPlus } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
-import { CelebrationEffects } from '../components/CelebrationEffects';
+import { celebrateApproval } from '../components/CelebrationEffects';
 import CreateProject from '../components/CreateProject';
 
 const ReviewStatusBadge = ({ status }) => {
@@ -126,6 +126,9 @@ const Dashboard = () => {
 
         if (recentlyChanged) {
           setRecentStatusChange(recentlyChanged.reviewStatus);
+          if (recentlyChanged.reviewStatus === 'APPROVED') {
+            celebrateApproval();
+          }
           // Clear the status after celebration
           setTimeout(() => setRecentStatusChange(null), 2000);
         }
@@ -162,8 +165,6 @@ const Dashboard = () => {
 
   return (
     <>
-      <CelebrationEffects status={recentStatusChange} shouldTrigger={!!recentStatusChange} />
-
       <div className="min-h-screen bg-background pt-20 pb-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-8">
