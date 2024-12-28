@@ -7,23 +7,28 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 const InvitePage = () => {
   const { projectId, inviteId } = useParams();
-  const { currentUser } = useAuth();
+  const { currentUser, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // Skip if auth is still loading
+    if (authLoading) return;
+
     const handleInvite = async () => {
       try {
         if (!projectId || !inviteId) {
           throw new Error('Invalid invite link');
         }
 
+        // If no user, redirect to sign in
         if (!currentUser) {
           navigate(`/signin?redirect=/invite/${projectId}/${inviteId}`);
           return;
         }
 
+        // Accept the invite
         const { redirect } = await acceptInvite(projectId, inviteId, currentUser.email);
         toast.success('Successfully joined the project!');
         navigate(redirect);
@@ -36,9 +41,10 @@ const InvitePage = () => {
     };
 
     handleInvite();
-  }, [projectId, inviteId, currentUser, navigate]);
+  }, [projectId, inviteId, currentUser, navigate, authLoading]);
 
-  if (loading) {
+  // Show loading spinner while auth is loading
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <LoadingSpinner />
@@ -46,6 +52,16 @@ const InvitePage = () => {
     );
   }
 
+  // Show loading spinner while processing invite
+  if (loading && !error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  // Show error if any
   if (error) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
