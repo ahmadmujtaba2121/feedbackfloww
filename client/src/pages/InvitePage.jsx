@@ -12,47 +12,70 @@ const InvitePage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [processed, setProcessed] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+
     const processInvite = async () => {
-      if (!projectId || !inviteId) {
+      // Skip if already processed or missing params
+      if (processed || !projectId || !inviteId) {
         setError('Invalid invite link');
         setLoading(false);
         return;
       }
 
-      try {
-        // If auth is still loading, wait
-        if (authLoading) return;
+      // Skip if auth is still loading
+      if (authLoading) {
+        return;
+      }
 
+      try {
         // If no user, redirect to sign in
         if (!currentUser) {
-          const redirectUrl = `/signin?redirect=/invite/${projectId}/${inviteId}`;
+          const currentUrl = `/invite/${projectId}/${inviteId}`;
+          const redirectUrl = `/signin?redirect=${encodeURIComponent(currentUrl)}`;
           navigate(redirectUrl);
           return;
         }
 
-        // Validate the invite first
+        console.log('Processing invite:', { projectId, inviteId, userEmail: currentUser.email });
+
+        // Validate the invite
         const invite = await validateInvite(projectId, inviteId);
+        console.log('Invite validated:', invite);
 
-        // If invite is valid, accept it
-        const { redirect } = await acceptInvite(projectId, inviteId, currentUser.email);
+        if (mounted) {
+          // Accept the invite
+          const { redirect } = await acceptInvite(projectId, inviteId, currentUser.email);
+          console.log('Invite accepted, redirecting to:', redirect);
 
-        // Show success message
-        toast.success(`Successfully joined the project as ${invite.role || 'viewer'}`);
+          // Show success message
+          toast.success('Successfully joined the project!');
 
-        // Navigate to the project
-        navigate(redirect, { replace: true });
+          // Mark as processed before navigation
+          setProcessed(true);
+
+          // Navigate to the project
+          navigate(redirect, { replace: true });
+        }
       } catch (err) {
         console.error('Error processing invite:', err);
-        setError(err.message || 'Failed to process invite');
-        setLoading(false);
+        if (mounted) {
+          setError(err.message || 'Failed to process invite');
+          setLoading(false);
+        }
       }
     };
 
     processInvite();
-  }, [projectId, inviteId, currentUser, authLoading, navigate]);
 
+    return () => {
+      mounted = false;
+    };
+  }, [projectId, inviteId, currentUser, authLoading, navigate, processed]);
+
+  // Show loading state while auth is initializing
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -64,7 +87,8 @@ const InvitePage = () => {
     );
   }
 
-  if (loading && !error) {
+  // Show loading state while processing invite
+  if (loading && !error && !processed) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -75,6 +99,7 @@ const InvitePage = () => {
     );
   }
 
+  // Show error state
   if (error) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -93,6 +118,7 @@ const InvitePage = () => {
     );
   }
 
+  // Return null while processing is happening
   return null;
 };
 
