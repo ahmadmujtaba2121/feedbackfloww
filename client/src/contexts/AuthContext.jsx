@@ -4,14 +4,9 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  updateProfile,
-  GoogleAuthProvider,
-  signInWithPopup
+  updateProfile
 } from 'firebase/auth';
-import { auth, db } from '../firebase/firebase';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
+import { auth } from '../firebase/firebase';
 
 const AuthContext = createContext();
 
@@ -26,47 +21,49 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Get additional user data from Firestore
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setCurrentUser({ ...user, ...userDoc.data() });
-        } else {
-          setCurrentUser(user);
-        }
-      } else {
-        setCurrentUser(null);
+    let mounted = true;
+    console.log('AuthProvider: Setting up auth state listener');
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('AuthProvider: Auth state changed:', { hasUser: !!user, userEmail: user?.email });
+      if (mounted) {
+        setCurrentUser(user);
+        setLoading(false);
       }
-      setLoading(false);
+    }, (error) => {
+      console.error('AuthProvider: Auth state error:', error);
+      if (mounted) {
+        setError(error);
+        setLoading(false);
+      }
     });
 
-    return unsubscribe;
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
 
-  const signInWithGoogle = async () => {
+  const signup = async (email, password, displayName) => {
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      // Create or update user document
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        lastSignIn: serverTimestamp(),
-      }, { merge: true });
-
-      toast.success('Signed in successfully');
-      navigate('/dashboard');
+      const { user } = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(user, { displayName });
+      return user;
     } catch (error) {
-      console.error('Google sign in error:', error);
-      toast.error(error.message || 'Failed to sign in with Google');
+      console.error('Signup error:', error);
+      throw error;
+    }
+  };
+
+  const login = async (email, password) => {
+    try {
+      const { user } = await signInWithEmailAndPassword(auth, email, password);
+      return user;
+    } catch (error) {
+      console.error('Login error:', error);
       throw error;
     }
   };
@@ -74,11 +71,8 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       await signOut(auth);
-      toast.success('Signed out successfully');
-      navigate('/signin');
     } catch (error) {
       console.error('Logout error:', error);
-      toast.error('Failed to sign out');
       throw error;
     }
   };
@@ -86,16 +80,27 @@ export function AuthProvider({ children }) {
   const value = {
     currentUser,
     loading,
-    signInWithGoogle,
-    logout,
-    signInWithEmailAndPassword,
-    signUp: createUserWithEmailAndPassword,
-    updateProfile
+    error,
+    signup,
+    login,
+    logout
   };
+
+  // Render a loading state while auth is initializing
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#080C14] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-white mt-4">Initializing...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }
