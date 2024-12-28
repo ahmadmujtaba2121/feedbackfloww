@@ -20,8 +20,17 @@ const InvitePage = () => {
 
     const validateAndRedirect = async () => {
       try {
+        if (!mounted) return;
         setLoading(true);
         setError(null);
+
+        // Wait for auth state to be determined
+        await new Promise((resolve) => {
+          const unsubscribe = auth.onAuthStateChanged((user) => {
+            unsubscribe();
+            resolve(user);
+          });
+        });
 
         // Check if Firebase is initialized
         if (!db) {
@@ -32,13 +41,14 @@ const InvitePage = () => {
 
         if (!mounted) return;
 
-        if (inviteData.role === 'editor') {
-          navigate(`/project/${projectId}/canvas`);
-        } else {
-          navigate(`/project/${projectId}`);
+        // If user is not logged in, redirect to sign in
+        if (!auth.currentUser) {
+          const returnUrl = encodeURIComponent(`/invite/${projectId}/${inviteId}`);
+          navigate(`/signin?redirect=${returnUrl}`);
+          return;
         }
 
-        // Update invite status
+        // Update invite status first
         const projectRef = doc(db, 'projects', projectId);
         await updateDoc(projectRef, {
           'invites': arrayUnion({
@@ -49,14 +59,23 @@ const InvitePage = () => {
           })
         });
 
+        // Then navigate based on role
+        if (inviteData.role === 'editor') {
+          navigate(`/project/${projectId}/canvas`, { replace: true });
+        } else {
+          navigate(`/project/${projectId}`, { replace: true });
+        }
+
       } catch (error) {
         console.error('Invite validation error:', error);
 
         if (!mounted) return;
 
-        if (retryCount < MAX_RETRIES && error.message.includes('not initialized')) {
+        if (retryCount < MAX_RETRIES &&
+          (error.message.includes('not initialized') ||
+            error.message.includes('database connection'))) {
           setRetryCount(prev => prev + 1);
-          retryTimeout = setTimeout(validateAndRedirect, 1000 * (retryCount + 1));
+          retryTimeout = setTimeout(validateAndRedirect, 1500 * (retryCount + 1));
         } else {
           setError(error.message);
           setLoading(false);
@@ -79,7 +98,9 @@ const InvitePage = () => {
           <LoadingSpinner />
           <p className="text-white mt-4">Validating invite link...</p>
           {retryCount > 0 && (
-            <p className="text-gray-400 mt-2">Retrying... ({retryCount}/{MAX_RETRIES})</p>
+            <p className="text-gray-400 mt-2">
+              Initializing... ({retryCount}/{MAX_RETRIES})
+            </p>
           )}
         </div>
       </div>

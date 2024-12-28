@@ -2,89 +2,141 @@ import { collection, doc, setDoc, serverTimestamp, getDoc, updateDoc, arrayUnion
 import { db } from '../firebase/firebase';
 import { v4 as uuidv4 } from 'uuid';
 
-export const createProjectInvite = async (projectId, creatorEmail, type = 'view') => {
-  try {
-    const projectRef = doc(db, 'projects', projectId);
-    const projectDoc = await getDoc(projectRef);
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
 
-    if (!projectDoc.exists()) {
-      throw new Error('Project not found');
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const retryOperation = async (operation, retries = MAX_RETRIES, delay = RETRY_DELAY) => {
+  let lastError;
+
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (i < retries - 1) {
+        await wait(delay * (i + 1));
+      }
     }
-
-    const invite = {
-      id: uuidv4(),
-      projectId,
-      creatorEmail,
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      used: false,
-      status: 'active',
-      role: type === 'view' ? 'viewer' : 'editor'
-    };
-
-    await updateDoc(projectRef, {
-      invites: arrayUnion(invite),
-      activityLog: arrayUnion({
-        type: 'invite_created',
-        user: creatorEmail,
-        inviteType: invite.role,
-        timestamp: new Date().toISOString()
-      })
-    });
-
-    const inviteLink = `${window.location.origin}/invite/${projectId}/${invite.id}`;
-    return { inviteId: invite.id, inviteLink };
-  } catch (error) {
-    console.error('Error creating invite:', error);
-    throw error;
   }
+
+  throw lastError;
 };
 
 export const validateInvite = async (inviteId, projectId) => {
-  try {
-    if (!db) {
+  if (!inviteId || !projectId) {
+    throw new Error('Invalid invite parameters');
+  }
+
+  return retryOperation(async () => {
+    try {
+      if (!db) {
+        throw new Error('Database connection error');
+      }
+
+      // Direct query for the specific project
+      const projectRef = doc(db, 'projects', projectId);
+      const projectDoc = await getDoc(projectRef);
+
+      if (!projectDoc.exists()) {
+        throw new Error('Project not found');
+      }
+
+      const projectData = projectDoc.data();
+
+      if (!projectData) {
+        throw new Error('Project data is corrupted');
+      }
+
+      const invites = projectData.invites || [];
+      const invite = invites.find(inv => inv.id === inviteId);
+
+      if (!invite) {
+        throw new Error('Invite not found');
+      }
+
+      if (invite.used) {
+        throw new Error('Invite has already been used');
+      }
+
+      const currentTime = new Date();
+      const expiryTime = new Date(invite.expiresAt);
+
+      if (currentTime > expiryTime) {
+        throw new Error('Invite has expired');
+      }
+
+      if (invite.status !== 'active') {
+        throw new Error('Invite is no longer active');
+      }
+
+      return {
+        projectData: {
+          id: projectDoc.id,
+          name: projectData.name,
+          ownerId: projectData.ownerId,
+          ...projectData
+        },
+        inviteData: invite
+      };
+    } catch (error) {
+      console.error('Error validating invite:', error);
+
+      // Rethrow specific errors that shouldn't be retried
+      if (
+        error.message.includes('not found') ||
+        error.message.includes('expired') ||
+        error.message.includes('already been used') ||
+        error.message.includes('no longer active')
+      ) {
+        throw error;
+      }
+
+      // For other errors, allow retry
       throw new Error('Database connection error');
     }
+  });
+};
 
-    // Direct query for the specific project
-    const projectRef = doc(db, 'projects', projectId);
-    const projectDoc = await getDoc(projectRef);
+export const createProjectInvite = async (projectId, creatorEmail, type = 'view') => {
+  return retryOperation(async () => {
+    try {
+      const projectRef = doc(db, 'projects', projectId);
+      const projectDoc = await getDoc(projectRef);
 
-    if (!projectDoc.exists()) {
-      throw new Error('Project not found');
+      if (!projectDoc.exists()) {
+        throw new Error('Project not found');
+      }
+
+      const invite = {
+        id: uuidv4(),
+        projectId,
+        creatorEmail,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        used: false,
+        status: 'active',
+        role: type === 'view' ? 'viewer' : 'editor'
+      };
+
+      await updateDoc(projectRef, {
+        invites: arrayUnion(invite),
+        activityLog: arrayUnion({
+          type: 'invite_created',
+          user: creatorEmail,
+          inviteType: invite.role,
+          timestamp: new Date().toISOString()
+        })
+      });
+
+      const inviteLink = `${window.location.origin}/invite/${projectId}/${invite.id}`;
+      return { inviteId: invite.id, inviteLink };
+    } catch (error) {
+      console.error('Error creating invite:', error);
+      throw error;
     }
-
-    const projectData = projectDoc.data();
-    const invites = projectData.invites || [];
-
-    const invite = invites.find(inv => inv.id === inviteId);
-
-    if (!invite) {
-      throw new Error('Invite not found');
-    }
-
-    if (invite.used) {
-      throw new Error('Invite has already been used');
-    }
-
-    const currentTime = new Date();
-    const expiryTime = new Date(invite.expiresAt);
-
-    if (currentTime > expiryTime) {
-      throw new Error('Invite has expired');
-    }
-
-    return {
-      projectData: {
-        id: projectDoc.id,
-        ...projectData
-      },
-      inviteData: invite
-    };
-  } catch (error) {
-    console.error('Error validating invite:', error);
-    throw error;
-  }
+  });
 };
 
 export const acceptInvite = async (projectId, inviteId, userEmail) => {
