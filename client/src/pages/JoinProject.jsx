@@ -1,55 +1,68 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
+import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { FiArrowRight } from 'react-icons/fi';
 
 const JoinProject = () => {
-    const [projectCode, setProjectCode] = useState('');
+    const [code, setCode] = useState('');
     const [loading, setLoading] = useState(false);
     const { currentUser } = useAuth();
     const navigate = useNavigate();
 
-    const handleJoin = async (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!projectCode.trim()) return;
+        if (!code.trim()) return;
 
         setLoading(true);
         try {
-            const projectRef = doc(db, 'projects', projectCode);
-            const projectDoc = await getDoc(projectRef);
+            // Query projects that have this code as either viewerCode or editorCode
+            const projectsRef = collection(db, 'projects');
+            const viewerQuery = query(projectsRef, where('viewerCode', '==', code.trim()));
+            const editorQuery = query(projectsRef, where('editorCode', '==', code.trim()));
 
-            if (!projectDoc.exists()) {
-                toast.error('Project not found');
+            const [viewerSnapshot, editorSnapshot] = await Promise.all([
+                getDocs(viewerQuery),
+                getDocs(editorQuery)
+            ]);
+
+            let projectDoc = viewerSnapshot.docs[0] || editorSnapshot.docs[0];
+
+            if (!projectDoc) {
+                toast.error('Invalid project code');
                 return;
             }
 
-            const data = projectDoc.data();
-            const members = data.members || [];
+            const projectId = projectDoc.id;
+            const projectData = projectDoc.data();
 
             // Check if user is already a member
-            if (members.some(member => member.email === currentUser.email)) {
-                navigate(`/project/${projectCode}`);
+            const isMember = projectData.members?.some(member => member.email === currentUser.email);
+            if (isMember) {
+                toast.success('Already a member of this project');
+                navigate(`/project/${projectId}`);
                 return;
             }
 
+            // Determine role based on which code was used
+            const role = code === projectData.editorCode ? 'editor' : 'viewer';
+
             // Add user to project members
-            const memberData = {
+            const newMember = {
                 email: currentUser.email,
-                role: 'viewer',
+                role,
                 addedAt: new Date().toISOString(),
                 status: 'active'
             };
 
-            await updateDoc(projectRef, {
-                members: arrayUnion(memberData),
-                [`lastActivity.${currentUser.email.replace(/\./g, '_')}`]: serverTimestamp()
+            await updateDoc(doc(db, 'projects', projectId), {
+                members: [...(projectData.members || []), newMember]
             });
 
-            toast.success('Successfully joined the project!');
-            navigate(`/project/${projectCode}`);
+            toast.success('Successfully joined project');
+            navigate(`/project/${projectId}`);
         } catch (error) {
             console.error('Error joining project:', error);
             toast.error('Failed to join project');
@@ -59,38 +72,42 @@ const JoinProject = () => {
     };
 
     return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-            <div className="max-w-md w-full bg-foreground rounded-lg shadow-xl p-8 border border-border">
-                <h2 className="text-2xl font-bold text-primary mb-6 text-center">Join Project</h2>
+        <div className="min-h-screen bg-background pt-20 pb-12 px-4">
+            <div className="max-w-md mx-auto">
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-bold text-secondary-foreground mb-2">Join Project</h1>
+                    <p className="text-muted-foreground">Enter the project code to join</p>
+                </div>
 
-                <form onSubmit={handleJoin} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label htmlFor="projectCode" className="block text-sm font-medium text-muted-foreground mb-2">
-                            Enter Project Code
+                        <label htmlFor="code" className="block text-sm font-medium text-muted-foreground mb-2">
+                            Project Code
                         </label>
                         <input
-                            id="projectCode"
+                            id="code"
                             type="text"
-                            value={projectCode}
-                            onChange={(e) => setProjectCode(e.target.value)}
+                            value={code}
+                            onChange={(e) => setCode(e.target.value)}
                             placeholder="Enter project code"
                             className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                            disabled={loading}
+                            required
                         />
                     </div>
 
                     <button
                         type="submit"
-                        disabled={loading || !projectCode.trim()}
-                        className="w-full py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                        disabled={loading || !code.trim()}
+                        className="w-full py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                        {loading ? <LoadingSpinner /> : 'Join Project'}
+                        {loading ? 'Joining...' : (
+                            <>
+                                Join Project
+                                <FiArrowRight className="w-5 h-5" />
+                            </>
+                        )}
                     </button>
                 </form>
-
-                <p className="mt-4 text-sm text-muted-foreground text-center">
-                    Ask the project owner for the project code
-                </p>
             </div>
         </div>
     );
