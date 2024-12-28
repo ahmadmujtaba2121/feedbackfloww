@@ -1,22 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
-import { FiCopy, FiCheck, FiX } from 'react-icons/fi';
-import { useAuth } from '../contexts/AuthContext';
+import { FiX, FiCopy } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 
-const ShareModal = ({ projectId, onClose }) => {
-  const [copied, setCopied] = useState(false);
-  const { currentUser } = useAuth();
-
+const ShareModal = ({ projectCode, onClose }) => {
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(projectId);
-      setCopied(true);
-      toast.success('Project code copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(projectCode);
+      toast.success('Project code copied to clipboard!');
     } catch (error) {
       console.error('Failed to copy:', error);
-      toast.error('Failed to copy project code');
+      toast.error('Failed to copy code');
     }
   };
 
@@ -32,7 +26,7 @@ const ShareModal = ({ projectId, onClose }) => {
         {/* Modal Content */}
         <div
           onClick={e => e.stopPropagation()}
-          className="relative w-full max-w-lg bg-foreground rounded-lg shadow-xl p-6 border border-border"
+          className="relative w-full max-w-md bg-foreground rounded-lg shadow-xl p-6 border border-border"
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -45,24 +39,25 @@ const ShareModal = ({ projectId, onClose }) => {
             </button>
           </div>
 
-          {/* Content */}
+          {/* Project Code */}
           <div className="space-y-4">
-            <p className="text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Share this project code with team members:
             </p>
-
-            <div className="flex items-center space-x-2">
-              <div className="flex-1 bg-background p-3 rounded-lg border border-border font-mono">
-                {projectId}
-              </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={projectCode}
+                readOnly
+                className="flex-1 px-4 py-2 bg-background border border-border rounded-lg focus:outline-none"
+              />
               <button
                 onClick={handleCopy}
-                className="p-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                className="p-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
               >
-                {copied ? <FiCheck className="w-5 h-5" /> : <FiCopy className="w-5 h-5" />}
+                <FiCopy className="w-5 h-5" />
               </button>
             </div>
-
             <p className="text-sm text-muted-foreground">
               Team members can join by going to /join and entering this code
             </p>
