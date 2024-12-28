@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { FcGoogle } from 'react-icons/fc';
 import { toast } from 'react-hot-toast';
@@ -7,7 +7,6 @@ import LoadingSpinner from '../components/LoadingSpinner';
 
 const SignIn = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const { signInWithGoogle } = useAuth();
 
@@ -15,7 +14,8 @@ const SignIn = () => {
     try {
       setLoading(true);
       await signInWithGoogle();
-      // Navigation is handled in AuthContext
+      toast.success('Signed in successfully');
+      navigate('/dashboard');
     } catch (error) {
       console.error('Google sign in error:', error);
       toast.error(error.message || 'Failed to sign in with Google');
@@ -25,7 +25,11 @@ const SignIn = () => {
   };
 
   if (loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   return (
