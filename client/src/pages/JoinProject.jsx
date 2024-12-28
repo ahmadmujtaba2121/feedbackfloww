@@ -18,7 +18,7 @@ const JoinProject = () => {
 
         setLoading(true);
         try {
-            // Query projects that have this code as either viewerCode or editorCode
+            // Query projects with either viewerCode or editorCode matching
             const projectsRef = collection(db, 'projects');
             const viewerQuery = query(projectsRef, where('viewerCode', '==', code.trim()));
             const editorQuery = query(projectsRef, where('editorCode', '==', code.trim()));
@@ -31,7 +31,7 @@ const JoinProject = () => {
             let projectDoc = viewerSnapshot.docs[0] || editorSnapshot.docs[0];
 
             if (!projectDoc) {
-                toast.error('Invalid project code');
+                toast.error('Project not found');
                 return;
             }
 
@@ -47,18 +47,24 @@ const JoinProject = () => {
             }
 
             // Determine role based on which code was used
-            const role = code === projectData.editorCode ? 'editor' : 'viewer';
+            const role = code === projectData.editorCode ? 'EDITOR' : 'VIEWER';
+
+            // Get user's display name from Firebase Auth
+            const displayName = currentUser.displayName || currentUser.email.split('@')[0];
 
             // Add user to project members
             const newMember = {
                 email: currentUser.email,
+                displayName,
                 role,
-                addedAt: new Date().toISOString(),
-                status: 'active'
+                uid: currentUser.uid,
+                addedAt: new Date().toISOString()
             };
 
+            // Update project with new member
             await updateDoc(doc(db, 'projects', projectId), {
-                members: [...(projectData.members || []), newMember]
+                members: [...(projectData.members || []), newMember],
+                updatedAt: new Date().toISOString()
             });
 
             toast.success('Successfully joined project');
