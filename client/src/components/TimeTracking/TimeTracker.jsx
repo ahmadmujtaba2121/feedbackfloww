@@ -1,336 +1,222 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { FiPlay, FiPause, FiClock, FiDollarSign } from 'react-icons/fi';
-import { doc, updateDoc, getDoc, onSnapshot, arrayUnion } from 'firebase/firestore';
-import { db } from '../../firebase/firebase';
+import React, { useState, useEffect } from 'react';
+import { FiPlay, FiPause, FiClock, FiUser, FiCalendar, FiCheckCircle, FiBarChart2 } from 'react-icons/fi';
+import { useTask } from '../../contexts/TaskContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 
-const TimeTracker = ({
-  projectId,
-  taskId,
-  initialRate = 0,
-  isOwner = false,
-  disabled = false
-}) => {
-  const [isTracking, setIsTracking] = useState(false);
-  const [timeSpent, setTimeSpent] = useState(0);
-  const [startTime, setStartTime] = useState(null);
-  const [hourlyRate, setHourlyRate] = useState(initialRate);
-  const [activeSession, setActiveSession] = useState(null);
-  const [currentReview, setCurrentReview] = useState(null);
-  const intervalRef = useRef(null);
-  const reviewRef = useRef(null);
-  const lastUpdateRef = useRef(0);
+const TimeTracker = () => {
+  const { tasks, updateTask } = useTask();
+  const { currentUser } = useAuth();
+  const [timeRecords, setTimeRecords] = useState({});
+  const [activeTimers, setActiveTimers] = useState({});
+  const [lastUpdate, setLastUpdate] = useState(Date.now());
 
-  // Subscribe to real-time updates for time tracking
+  // Load saved time records and active timers
   useEffect(() => {
-    if (!projectId || !taskId) return;
+    const loadTimeRecords = () => {
+      const savedRecords = localStorage.getItem('taskTimeRecords');
+      if (savedRecords) {
+        try {
+          const records = JSON.parse(savedRecords);
+          setTimeRecords(records);
+        } catch (error) {
+          console.error('Error loading time records:', error);
+        }
+      }
 
-    const unsubscribe = onSnapshot(
-      doc(db, 'projects', projectId),
-      (docSnapshot) => {
-        if (docSnapshot.exists()) {
-          const data = docSnapshot.data();
-          const reviews = data.reviews || [];
-          const review = reviews.find(r => r.id === taskId);
-
-          if (review) {
-            reviewRef.current = review;
-            setCurrentReview(review);
-
-            // Update time spent
-            const baseTimeSpent = review.timeSpent || 0;
-            setTimeSpent(baseTimeSpent);
-
-            // Update hourly rate only if it's not being edited
-            if (!isTracking) {
-              setHourlyRate(review.hourlyRate || initialRate);
-            }
-
-            // Check for active tracking session
-            const activeTrackingSession = review.activeTrackingSession;
-            if (activeTrackingSession) {
-              setActiveSession(activeTrackingSession);
-              if (!isTracking) {
-                const startTimeDate = new Date(activeTrackingSession.startTime);
-                setStartTime(startTimeDate);
-                setIsTracking(true);
-                startTimer(activeTrackingSession);
-              }
-            } else if (isTracking) {
-              stopTracking();
-            }
+      // Load active timers
+      const active = JSON.parse(localStorage.getItem('activeTimers') || '{}');
+      setActiveTimers(prev => {
+        const newTimers = {};
+        Object.entries(active).forEach(([taskId, timer]) => {
+          if (timer.isRunning) {
+            const startTime = new Date(timer.startTime);
+            const elapsed = Math.floor((new Date() - startTime) / 1000);
+            newTimers[taskId] = {
+              ...timer,
+              elapsed,
+              startTime: timer.startTime
+            };
           }
-        }
-      },
-      (error) => {
-        console.error('Error in time tracking snapshot:', error);
-        toast.error('Error tracking time');
-        stopTracking();
-      }
-    );
+        });
+        return newTimers;
+      });
 
-    // Cleanup function
-    return () => {
-      unsubscribe();
-      stopTracking();
+      setLastUpdate(Date.now());
     };
-  }, [projectId, taskId]);
 
-  const startTimer = (session) => {
-    try {
-      stopTimer(); // Clear any existing timer
+    loadTimeRecords();
+    const interval = setInterval(loadTimeRecords, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-      const sessionStart = new Date(session.startTime);
-      const baseTime = session.baseTimeSpent || 0;
+  const formatDuration = (seconds) => {
+    if (!seconds && seconds !== 0) return '0h 0m 0s';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours}h ${minutes.toString().padStart(2, '0')}m ${secs.toString().padStart(2, '0')}s`;
+  };
 
-      // Set initial time immediately
-      const elapsed = Date.now() - sessionStart.getTime();
-      const newTimeSpent = baseTime + elapsed;
-      setTimeSpent(newTimeSpent);
-      lastUpdateRef.current = Date.now();
+  const getTotalTime = (taskId) => {
+    const records = timeRecords[taskId] || [];
+    const completedTime = records.reduce((total, record) => total + record.duration, 0);
+    const activeTimer = activeTimers[taskId];
 
-      // Start interval
-      intervalRef.current = setInterval(() => {
-        const now = Date.now();
-        const currentElapsed = now - sessionStart.getTime();
-        const currentTimeSpent = baseTime + currentElapsed;
+    if (activeTimer?.isRunning) {
+      const startTime = new Date(activeTimer.startTime);
+      const activeTime = Math.floor((new Date() - startTime) / 1000);
+      return completedTime + activeTime;
+    }
 
-        // Only update if more than 100ms has passed since last update
-        if (now - lastUpdateRef.current >= 100) {
-          setTimeSpent(currentTimeSpent);
-          lastUpdateRef.current = now;
+    return completedTime;
+  };
+
+  const getUserTotalTime = () => {
+    let total = 0;
+    Object.entries(timeRecords).forEach(([taskId, records]) => {
+      records.forEach(record => {
+        if (record.user === currentUser?.email) {
+          total += record.duration;
         }
-      }, 100);
-    } catch (error) {
-      console.error('Error starting timer:', error);
-      stopTracking();
-    }
-  };
+      });
+    });
 
-  const stopTimer = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  };
-
-  const stopTracking = () => {
-    stopTimer();
-    setIsTracking(false);
-    setStartTime(null);
-    setActiveSession(null);
-  };
-
-  const formatTime = (ms) => {
-    try {
-      const totalSeconds = Math.floor(ms / 1000);
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      return `${hours}h ${minutes}m`;
-    } catch (error) {
-      console.error('Error formatting time:', error);
-      return '0h 0m';
-    }
-  };
-
-  const updateReviewInDatabase = async (reviewUpdate) => {
-    try {
-      const projectRef = doc(db, 'projects', projectId);
-      const projectDoc = await getDoc(projectRef);
-
-      if (!projectDoc.exists()) {
-        throw new Error('Project not found');
+    // Add active times
+    Object.entries(activeTimers).forEach(([taskId, timer]) => {
+      if (timer.isRunning) {
+        const startTime = new Date(timer.startTime);
+        const activeTime = Math.floor((new Date() - startTime) / 1000);
+        total += activeTime;
       }
+    });
 
-      const data = projectDoc.data();
-      const reviews = [...(data.reviews || [])];
-      const reviewIndex = reviews.findIndex(r => r.id === taskId);
+    return total;
+  };
 
-      if (reviewIndex === -1) {
-        throw new Error('Review not found');
+  // Group tasks by date
+  const groupedTasks = tasks.reduce((acc, task) => {
+    const records = timeRecords[task.id] || [];
+    const activeTimer = activeTimers[task.id];
+
+    if (records.length === 0 && !activeTimer?.isRunning) return acc;
+
+    records.forEach(record => {
+      const date = new Date(record.startTime).toLocaleDateString();
+      if (!acc[date]) acc[date] = [];
+      if (!acc[date].find(t => t.id === task.id)) {
+        acc[date].push(task);
       }
+    });
 
-      const updatedReview = {
-        ...reviews[reviewIndex],
-        ...reviewUpdate,
-        lastUpdated: new Date().toISOString()
-      };
-
-      reviews[reviewIndex] = updatedReview;
-      await updateDoc(projectRef, { reviews });
-      return updatedReview;
-    } catch (error) {
-      console.error('Error updating review:', error);
-      throw error;
+    if (activeTimer?.isRunning) {
+      const date = new Date(activeTimer.startTime).toLocaleDateString();
+      if (!acc[date]) acc[date] = [];
+      if (!acc[date].find(t => t.id === task.id)) {
+        acc[date].push(task);
+      }
     }
-  };
 
-  const handleStartTracking = async () => {
-    if (!isOwner || disabled || !reviewRef.current) return;
-
-    try {
-      const now = new Date();
-      const newSession = {
-        startTime: now.toISOString(),
-        baseTimeSpent: timeSpent,
-        hourlyRate,
-        timeEntries: []
-      };
-
-      await updateReviewInDatabase({
-        activeTrackingSession: newSession
-      });
-
-      setStartTime(now);
-      setActiveSession(newSession);
-      setIsTracking(true);
-      startTimer(newSession);
-      toast.success('Time tracking started');
-    } catch (error) {
-      console.error('Error starting time tracking:', error);
-      toast.error('Failed to start time tracking');
-      stopTracking();
-    }
-  };
-
-  const handleStopTracking = async () => {
-    if (!isOwner || disabled || !activeSession || !reviewRef.current) return;
-
-    try {
-      // Stop timer immediately to prevent further updates
-      stopTimer();
-      setIsTracking(false);
-
-      const now = new Date();
-      const sessionStart = new Date(activeSession.startTime);
-      const duration = now.getTime() - sessionStart.getTime();
-      const totalTimeSpent = (activeSession.baseTimeSpent || 0) + duration;
-
-      // Create time entry for invoice
-      const timeEntry = {
-        id: `time-${Date.now()}`,
-        taskId: taskId,
-        description: reviewRef.current?.description || 'Untitled Task',
-        duration: duration / 1000, // Convert to seconds
-        timestamp: now.toISOString(),
-        startTime: activeSession.startTime,
-        endTime: now.toISOString(),
-        hourlyRate: hourlyRate,
-        taskDescription: reviewRef.current?.description || 'Untitled Task'
-      };
-
-      // Update review first
-      await updateReviewInDatabase({
-        timeSpent: totalTimeSpent,
-        activeTrackingSession: null,
-        timeEntries: [
-          ...(reviewRef.current.timeEntries || []),
-          timeEntry
-        ]
-      });
-
-      // Then update project's timeEntries
-      const projectRef = doc(db, 'projects', projectId);
-      await updateDoc(projectRef, {
-        timeEntries: arrayUnion(timeEntry)
-      });
-
-      // Reset state after successful update
-      setStartTime(null);
-      setActiveSession(null);
-      setTimeSpent(totalTimeSpent);
-      toast.success('Time tracking stopped');
-    } catch (error) {
-      console.error('Error stopping time tracking:', error);
-      toast.error('Failed to stop time tracking');
-      // Complete the stop tracking even if update fails
-      stopTracking();
-    }
-  };
-
-  const handleRateChange = async (e) => {
-    if (!isOwner || !reviewRef.current) return;
-
-    const newRate = Number(e.target.value);
-    if (isNaN(newRate) || newRate < 0) return;
-
-    try {
-      await updateReviewInDatabase({
-        hourlyRate: newRate
-      });
-
-      setHourlyRate(newRate);
-      toast.success('Rate updated');
-    } catch (error) {
-      console.error('Error updating rate:', error);
-      toast.error('Failed to update rate');
-      // Revert to previous rate
-      setHourlyRate(reviewRef.current.hourlyRate || initialRate);
-    }
-  };
+    return acc;
+  }, {});
 
   return (
-    <div className="bg-slate-900/50 rounded-lg p-3 space-y-3">
-      {/* Time Display */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-slate-300">
-          <FiClock className="w-4 h-4" />
-          <span>{formatTime(timeSpent)}</span>
+    <div className="bg-background p-6 rounded-lg border border-border">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-xl font-semibold text-foreground">Time Tracking Overview</h2>
+        <div className="text-lg font-mono text-muted-foreground">
+          Total Time: {formatDuration(getUserTotalTime())}
         </div>
-        {isOwner && (
-          <div className="flex gap-2">
-            {!isTracking ? (
-              <button
-                onClick={handleStartTracking}
-                disabled={disabled}
-                className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Start tracking"
-              >
-                <FiPlay className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                onClick={handleStopTracking}
-                disabled={disabled}
-                className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Stop tracking"
-              >
-                <FiPause className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Rate Setting (only for owners) */}
-      {isOwner && (
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-slate-300">
-            <FiDollarSign className="w-4 h-4" />
-            <span>Hourly Rate</span>
-          </div>
-          <input
-            type="number"
-            value={hourlyRate}
-            onChange={(e) => setHourlyRate(Number(e.target.value))}
-            onBlur={handleRateChange}
-            disabled={disabled}
-            min="0"
-            step="1"
-            className="w-20 px-2 py-1 bg-slate-800 border border-slate-600 rounded text-right text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-        </div>
-      )}
+      <div className="space-y-8">
+        {Object.entries(groupedTasks)
+          .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+          .map(([date, dateTasks]) => (
+            <div key={date}>
+              <h3 className="text-lg font-medium text-foreground mb-4">{date}</h3>
+              <div className="space-y-4">
+                {dateTasks.map(task => {
+                  const records = timeRecords[task.id] || [];
+                  const activeTimer = activeTimers[task.id];
+                  const totalTime = getTotalTime(task.id);
+                  const dateRecords = records.filter(
+                    record => new Date(record.startTime).toLocaleDateString() === date
+                  );
 
-      {/* Estimated Cost */}
-      {hourlyRate > 0 && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-400">Estimated Cost</span>
-          <span className="text-slate-300">
-            ${((timeSpent / 3600000) * hourlyRate).toFixed(2)}
-          </span>
-        </div>
-      )}
+                  if (activeTimer?.isRunning) {
+                    const startTime = new Date(activeTimer.startTime);
+                    if (startTime.toLocaleDateString() === date) {
+                      dateRecords.push({
+                        startTime: activeTimer.startTime,
+                        duration: Math.floor((new Date() - startTime) / 1000),
+                        user: currentUser?.email,
+                        isActive: true
+                      });
+                    }
+                  }
+
+                  return (
+                    <div key={task.id} className="bg-card p-4 rounded-lg border border-border">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="font-medium text-foreground">{task.title}</h3>
+                            <span className={`px-2 py-1 text-xs rounded ${task.status === 'COMPLETED'
+                              ? 'bg-success/20 text-success'
+                              : 'bg-primary/20 text-primary'
+                              }`}>
+                              {task.status}
+                            </span>
+                          </div>
+
+                          {/* Task Details */}
+                          <div className="flex flex-wrap gap-3 text-sm mb-4">
+                            <span className="flex items-center gap-1 text-muted-foreground">
+                              <FiUser className="w-4 h-4" />
+                              {task.assignedTo || 'Unassigned'}
+                            </span>
+                            {task.dueDate && (
+                              <span className="flex items-center gap-1 text-muted-foreground">
+                                <FiCalendar className="w-4 h-4" />
+                                {new Date(task.dueDate).toLocaleDateString()}
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1 text-muted-foreground">
+                              <FiClock className="w-4 h-4" />
+                              Total: {formatDuration(totalTime)}
+                            </span>
+                          </div>
+
+                          {/* Time Records */}
+                          <div className="space-y-2">
+                            {dateRecords.map((record, index) => (
+                              <div key={index} className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-muted-foreground">
+                                    {new Date(record.startTime).toLocaleTimeString()}
+                                  </span>
+                                  {record.isActive && (
+                                    <span className="px-2 py-0.5 text-xs bg-primary/20 text-primary rounded">
+                                      Active
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="font-mono">
+                                  {formatDuration(record.duration)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+      </div>
     </div>
   );
 };

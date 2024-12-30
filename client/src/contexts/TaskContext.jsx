@@ -282,72 +282,30 @@ export const TaskProvider = ({ children, projectId }) => {
     }
   }, [projectRef]);
 
-  // Initial data fetch
+  // Add real-time sync for tasks
   useEffect(() => {
-    let isMounted = true;
-    let unsubscribe = () => { };
+    if (!projectRef) return;
 
-    const fetchInitialData = async () => {
-      if (!projectRef) return;
-
-      try {
-        setLoading(true);
-        console.log('Fetching initial project data...');
-
-        // Get initial project data
-        const projectSnap = await getDoc(projectRef);
-        if (!projectSnap.exists()) {
-          throw new Error('Project not found');
-        }
-
-        const projectData = projectSnap.data();
-        console.log('Initial project data received:', projectData);
-
-        if (isMounted) {
-          setProject(projectData);
-          const normalizedData = normalizeTaskData(projectData);
-          const combinedTasks = [...normalizedData.tasks, ...normalizedData.reviews];
-          console.log('Normalized tasks:', combinedTasks);
-          setTasks(combinedTasks);
-          setLastUpdate(new Date().toISOString());
-        }
-
-        // Set up real-time listener
-        unsubscribe = onSnapshot(projectRef, (doc) => {
-          if (!doc.exists()) return;
-
-          const data = doc.data();
-          console.log('Real-time update received:', data);
-
-          if (isMounted) {
-            setProject(data);
-            const normalizedData = normalizeTaskData(data);
-            const combinedTasks = [...normalizedData.tasks, ...normalizedData.reviews];
-            console.log('Updated normalized tasks:', combinedTasks);
-            setTasks(combinedTasks);
-            setLastUpdate(new Date().toISOString());
-          }
-        });
-
-      } catch (err) {
-        console.error('Error fetching project data:', err);
-        if (isMounted) {
-          setError(err.message);
-          toast.error('Failed to load project data');
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+    const unsubscribe = onSnapshot(projectRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        const normalized = normalizeTaskData(data);
+        setTasks(normalized.tasks);
+        setProject(data);
+        setLastUpdate(data.lastModified);
+        setLoading(false);
+      } else {
+        console.warn('Project document does not exist');
+        setTasks([]);
+        setLoading(false);
       }
-    };
+    }, (error) => {
+      console.error('Error loading tasks:', error);
+      setError(error);
+      setLoading(false);
+    });
 
-    fetchInitialData();
-
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, [projectRef, normalizeTaskData]);
 
   // Memoize the context value

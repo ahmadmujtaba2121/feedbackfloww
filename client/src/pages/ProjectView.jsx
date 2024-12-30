@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiUpload, FiMaximize2, FiClock, FiUsers, FiFile, FiImage, FiTrash2, FiEye, FiList, FiCalendar } from 'react-icons/fi';
+import { FiUpload, FiMaximize2, FiClock, FiUsers, FiFile, FiImage, FiTrash2, FiEye, FiList, FiCalendar, FiCheckSquare, FiZap, FiDollarSign } from 'react-icons/fi';
 import { auth, db } from '../firebase/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
@@ -15,6 +15,8 @@ import { TaskProvider } from '../contexts/TaskContext';
 import KanbanBoard from '../components/KanbanBoard';
 import Calendar from '../components/Calendar';
 import TeamSection from '../components/TeamSection';
+import TaskAssignmentSection from '../components/TaskManagement/TaskAssignmentSection';
+import InvoiceSection from '../components/TimeTracking/InvoiceSection';
 
 const ProjectView = () => {
   const { projectId, inviteId } = useParams();
@@ -251,6 +253,100 @@ const ProjectView = () => {
     });
   };
 
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'tasks':
+        return (
+          <TaskProvider projectId={projectId}>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-semibold text-secondary-foreground">Project Tasks</h2>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => isInviteView ? navigate(`/invite/${projectId}/${inviteId}/kanban`) : navigate(`/project/${projectId}/kanban`)}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors flex items-center space-x-2"
+                  >
+                    <FiList className="w-5 h-5" />
+                    <span>View All Tasks</span>
+                  </button>
+                </div>
+              </div>
+              <TaskAssignmentSection projectId={projectId} members={project?.members || []} />
+            </div>
+          </TaskProvider>
+        );
+      case 'files':
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold text-secondary-foreground">Project Files</h2>
+              {canEdit && (
+                <button
+                  onClick={handleUploadClick}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors font-medium flex items-center space-x-2"
+                >
+                  <FiUpload className="w-5 h-5" />
+                  <span>Upload Files</span>
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {project.files?.map((file) => (
+                <div
+                  key={file.id}
+                  className="bg-muted rounded-lg p-4 border border-border"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center">
+                      <FiImage className="w-5 h-5 text-primary mr-2" />
+                      <span className="text-secondary-foreground font-medium">{file.name}</span>
+                    </div>
+                    {userRole !== 'VIEWER' && (
+                      <button
+                        onClick={() => handleDeleteClick(file)}
+                        className="text-red-400 hover:text-red-300 transition-colors"
+                      >
+                        <FiTrash2 className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Uploaded by {file.uploadedBy}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      case 'team':
+        return <TeamSection members={project.members || []} />;
+      case 'time':
+        return (
+          <div className="space-y-6">
+            <TimeTracker projectId={projectId} />
+          </div>
+        );
+      case 'calendar':
+        return (
+          <div className="bg-card rounded-lg p-6">
+            <Calendar project={project} />
+          </div>
+        );
+      case 'ai-assistant':
+        return (
+          <div className="bg-card rounded-lg p-6">
+            <div className="text-center text-muted-foreground">
+              <p>AI Assistant feature is coming soon!</p>
+            </div>
+          </div>
+        );
+      case 'invoice':
+        return <InvoiceSection projectId={projectId} />;
+      default:
+        return null;
+    }
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -261,13 +357,14 @@ const ProjectView = () => {
 
   return (
     <TaskProvider>
-      <div className="min-h-screen bg-background pt-20 pb-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-foreground/95 backdrop-blur-lg rounded-lg p-6 mb-6 border border-border">
-            <div className="flex justify-between items-start">
-              <div>
-                <h1 className="text-3xl font-bold text-secondary-foreground mb-2">{project.name}</h1>
-                <p className="text-muted-foreground">{project.description}</p>
+      <div className="min-h-screen bg-background pt-16 sm:pt-20 pb-8 sm:pb-12">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          {/* Header Section */}
+          <div className="bg-foreground/95 backdrop-blur-lg rounded-lg p-4 sm:p-6 mb-4 sm:mb-6 border border-border">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+              <div className="w-full sm:w-auto">
+                <h1 className="text-2xl sm:text-3xl font-bold text-secondary-foreground mb-2 break-words">{project.name}</h1>
+                <p className="text-sm sm:text-base text-muted-foreground break-words">{project.description}</p>
                 <div className="mt-2 flex items-center space-x-2">
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${userRole === 'OWNER' ? 'bg-primary/20 text-primary' :
                     userRole === 'EDITOR' ? 'bg-primary/10 text-primary' :
@@ -278,42 +375,42 @@ const ProjectView = () => {
                   </span>
                 </div>
               </div>
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto">
                 {userRole === 'OWNER' && !isInviteView && <ShareButton projectId={projectId} />}
                 <button
                   onClick={handleOpenCalendar}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors flex items-center space-x-2 font-medium"
+                  className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors flex items-center justify-center space-x-2 font-medium text-sm sm:text-base"
                 >
-                  <FiCalendar className="w-5 h-5" />
+                  <FiCalendar className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span>Calendar</span>
                 </button>
                 <button
                   onClick={handleOpenKanban}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors flex items-center space-x-2"
+                  className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors flex items-center justify-center space-x-2 text-sm sm:text-base"
                 >
-                  <FiList className="w-5 h-5" />
+                  <FiList className="w-4 h-4 sm:w-5 sm:h-5" />
                   <span>Kanban Board</span>
                 </button>
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="mt-6 flex flex-wrap gap-4">
+            <div className="mt-4 sm:mt-6 flex flex-wrap gap-2 sm:gap-4">
               <button
                 onClick={handleOpenCanvas}
                 disabled={!project?.files?.length}
-                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${project?.files?.length
+                className={`flex items-center px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm sm:text-base ${project?.files?.length
                   ? 'bg-primary text-primary-foreground hover:bg-accent'
                   : 'bg-muted/50 text-muted-foreground cursor-not-allowed'
                   }`}
               >
-                <FiMaximize2 className="w-5 h-5 mr-2" />
+                <FiMaximize2 className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                 Open Canvas
               </button>
 
               {userRole !== 'VIEWER' && (
-                <label className="flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors cursor-pointer">
-                  <FiUpload className="w-5 h-5 mr-2" />
+                <label className="flex items-center px-3 sm:px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors cursor-pointer text-sm sm:text-base">
+                  <FiUpload className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                   Upload File
                   <input
                     type="file"
@@ -328,9 +425,9 @@ const ProjectView = () => {
               {userRole === 'OWNER' && (
                 <button
                   onClick={handleDeleteProject}
-                  className="flex items-center px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors font-medium"
+                  className="flex items-center px-3 sm:px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors font-medium text-sm sm:text-base"
                 >
-                  <FiTrash2 className="w-5 h-5 mr-2" />
+                  <FiTrash2 className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
                   Delete Project
                 </button>
               )}
@@ -338,157 +435,84 @@ const ProjectView = () => {
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex space-x-4 mb-6 border-b border-border">
-            <button
-              onClick={() => setActiveTab('tasks')}
-              className={`px-4 py-2 font-medium transition-colors ${activeTab === 'tasks'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-secondary-foreground'
-                }`}
-            >
-              <FiList className="w-5 h-5 inline-block mr-2" />
-              Tasks
-            </button>
-            <button
-              onClick={() => setActiveTab('files')}
-              className={`px-4 py-2 font-medium transition-colors ${activeTab === 'files'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-secondary-foreground'
-                }`}
-            >
-              <FiFile className="w-5 h-5 inline-block mr-2" />
-              Files
-            </button>
-            <button
-              onClick={() => setActiveTab('team')}
-              className={`px-4 py-2 font-medium transition-colors ${activeTab === 'team'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-secondary-foreground'
-                }`}
-            >
-              <FiUsers className="w-5 h-5 inline-block mr-2" />
-              Team
-            </button>
-            <button
-              onClick={() => setActiveTab('time')}
-              className={`px-4 py-2 font-medium transition-colors ${activeTab === 'time'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-secondary-foreground'
-                }`}
-            >
-              <FiClock className="w-5 h-5 inline-block mr-2" />
-              Time Tracking
-            </button>
-            <button
-              onClick={handleOpenCalendar}
-              className={`px-4 py-2 font-medium transition-colors ${activeTab === 'calendar'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-secondary-foreground'
-                }`}
-            >
-              <FiCalendar className="w-5 h-5 inline-block mr-2" />
-              Calendar
-            </button>
-            <button
-              onClick={handleOpenAIAssistant}
-              className={`px-4 py-2 font-medium transition-colors ${activeTab === 'ai-assistant'
-                ? 'text-primary border-b-2 border-primary'
-                : 'text-muted-foreground hover:text-secondary-foreground'
-                }`}
-            >
-              <FiMaximize2 className="w-5 h-5 inline-block mr-2" />
-              AI Assistant
-            </button>
+          <div className="overflow-x-auto scrollbar-hide">
+            <div className="flex space-x-2 sm:space-x-4 mb-4 sm:mb-6 border-b border-border min-w-max">
+              <button
+                onClick={() => setActiveTab('tasks')}
+                className={`px-3 sm:px-4 py-2 font-medium transition-colors text-sm sm:text-base ${activeTab === 'tasks'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-muted-foreground hover:text-secondary-foreground'
+                  }`}
+              >
+                <FiList className="w-4 h-4 sm:w-5 sm:h-5 inline-block mr-2" />
+                Tasks
+              </button>
+              <button
+                onClick={() => setActiveTab('files')}
+                className={`px-3 sm:px-4 py-2 font-medium transition-colors text-sm sm:text-base ${activeTab === 'files'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-muted-foreground hover:text-secondary-foreground'
+                  }`}
+              >
+                <FiFile className="w-4 h-4 sm:w-5 sm:h-5 inline-block mr-2" />
+                Files
+              </button>
+              <button
+                onClick={() => setActiveTab('team')}
+                className={`px-3 sm:px-4 py-2 font-medium transition-colors text-sm sm:text-base ${activeTab === 'team'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-muted-foreground hover:text-secondary-foreground'
+                  }`}
+              >
+                <FiUsers className="w-4 h-4 sm:w-5 sm:h-5 inline-block mr-2" />
+                Team
+              </button>
+              <button
+                onClick={() => setActiveTab('time')}
+                className={`px-3 sm:px-4 py-2 font-medium transition-colors text-sm sm:text-base ${activeTab === 'time'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-muted-foreground hover:text-secondary-foreground'
+                  }`}
+              >
+                <FiClock className="w-4 h-4 sm:w-5 sm:h-5 inline-block mr-2" />
+                Time Tracking
+              </button>
+              <button
+                onClick={handleOpenCalendar}
+                className={`px-3 sm:px-4 py-2 font-medium transition-colors text-sm sm:text-base ${activeTab === 'calendar'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-muted-foreground hover:text-secondary-foreground'
+                  }`}
+              >
+                <FiCalendar className="w-4 h-4 sm:w-5 sm:h-5 inline-block mr-2" />
+                Calendar
+              </button>
+              <button
+                onClick={handleOpenAIAssistant}
+                className={`px-3 sm:px-4 py-2 font-medium transition-colors text-sm sm:text-base ${activeTab === 'ai-assistant'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-muted-foreground hover:text-secondary-foreground'
+                  }`}
+              >
+                <FiMaximize2 className="w-4 h-4 sm:w-5 sm:h-5 inline-block mr-2" />
+                AI Assistant
+              </button>
+              <button
+                onClick={() => setActiveTab('invoice')}
+                className={`px-3 sm:px-4 py-2 font-medium transition-colors text-sm sm:text-base ${activeTab === 'invoice'
+                  ? 'text-primary border-b-2 border-primary'
+                  : 'text-muted-foreground hover:text-secondary-foreground'
+                  }`}
+              >
+                <FiDollarSign className="w-4 h-4 sm:w-5 sm:h-5 inline-block mr-2" />
+                Invoice
+              </button>
+            </div>
           </div>
 
           {/* Content Area */}
-          <div className="bg-foreground/95 backdrop-blur-lg rounded-lg border border-border p-6">
-            {activeTab === 'tasks' && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-semibold text-secondary-foreground">Project Tasks</h2>
-                  <button
-                    onClick={() => isInviteView ? navigate(`/invite/${projectId}/${inviteId}/kanban`) : navigate(`/project/${projectId}/kanban`)}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors flex items-center space-x-2"
-                  >
-                    <FiList className="w-5 h-5" />
-                    <span>View All Tasks</span>
-                  </button>
-                </div>
-                <div className="bg-muted rounded-lg p-4">
-                  <p className="text-muted-foreground text-center">
-                    View and manage your tasks in the Kanban board for a better overview.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'files' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-semibold text-secondary-foreground">Project Files</h2>
-                  {canEdit && (
-                    <button
-                      onClick={handleUploadClick}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors font-medium flex items-center space-x-2"
-                    >
-                      <FiUpload className="w-5 h-5" />
-                      <span>Upload Files</span>
-                    </button>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {project.files?.map((file) => (
-                    <div
-                      key={file.id}
-                      className="bg-muted rounded-lg p-4 border border-border"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center">
-                          <FiImage className="w-5 h-5 text-primary mr-2" />
-                          <span className="text-secondary-foreground font-medium">{file.name}</span>
-                        </div>
-                        {userRole !== 'VIEWER' && (
-                          <button
-                            onClick={() => handleDeleteClick(file)}
-                            className="text-red-400 hover:text-red-300 transition-colors"
-                          >
-                            <FiTrash2 className="w-5 h-5" />
-                          </button>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Uploaded by {file.uploadedBy}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'team' && (
-              <TeamSection members={project.members || []} />
-            )}
-
-            {activeTab === 'time' && (
-              <div className="space-y-6">
-                <TimeTracker projectId={projectId} />
-                {canEdit && <InvoiceGenerator projectId={projectId} />}
-              </div>
-            )}
-
-            {activeTab === 'calendar' && (
-              <div className="bg-card rounded-lg p-6">
-                <Calendar project={project} />
-              </div>
-            )}
-            {activeTab === 'ai-assistant' && (
-              <div className="bg-card rounded-lg p-6">
-                <div className="text-center text-muted-foreground">
-                  <p>AI Assistant feature is coming soon!</p>
-                </div>
-              </div>
-            )}
+          <div className="bg-foreground/95 backdrop-blur-lg rounded-lg border border-border p-3 sm:p-6">
+            {renderContent()}
           </div>
         </div>
 
