@@ -9,6 +9,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import PrivateRoute from './components/PrivateRoute';
 import Navigation from './components/Navigation';
 import LoadingSpinner from './components/LoadingSpinner';
+import DashboardPage from './pages/DashboardPage';
 
 // Lazy load components
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));

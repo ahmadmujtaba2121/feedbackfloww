@@ -66,6 +66,7 @@ const TaskAssignmentSection = ({ projectId, members }) => {
     const timerRef = useRef(null);
     const [timeRecords, setTimeRecords] = useState({});
     const [activeTimers, setActiveTimers] = useState({});
+    const [, setCountdownTick] = useState(0);
 
     // Filter tasks based on status and assignment
     const filteredTasks = useMemo(() => {
@@ -97,14 +98,44 @@ const TaskAssignmentSection = ({ projectId, members }) => {
             const task = tasks.find(t => t.id === taskId);
             if (!task) return;
 
-            const updatedTask = {
-                ...task,
-                status: newStatus,
-                lastModified: new Date().toISOString()
-            };
+            // Only notify if status is actually changing
+            if (task.status !== newStatus) {
+                const updatedTask = {
+                    ...task,
+                    status: newStatus,
+                    lastModified: new Date().toISOString()
+                };
 
-            await updateTask(taskId, updatedTask);
-            toast.success('Task status updated');
+                await updateTask(taskId, updatedTask);
+
+                // Create a notification key specific to this status change
+                const statusNotificationKey = `status_change_${taskId}_${newStatus}`;
+                const wasNotified = localStorage.getItem(statusNotificationKey);
+
+                // Only notify the owner if they haven't been notified about this specific status change
+                if (task.createdBy === currentUser?.email && !wasNotified) {
+                    const taskTitle = task.title.length > 30 ? task.title.substring(0, 30) + '...' : task.title;
+                    const message = newStatus === 'COMPLETED'
+                        ? `Task "${taskTitle}" has been completed`
+                        : `Task "${taskTitle}" is now ${newStatus.toLowerCase()}`;
+
+                    toast.success(message);
+                    localStorage.setItem(statusNotificationKey, new Date().toISOString());
+                }
+
+                // If the owner is different from the assignee, notify the owner about completion
+                if (task.createdBy !== currentUser?.email && newStatus === 'COMPLETED') {
+                    const ownerNotificationKey = `completed_notification_${taskId}`;
+                    const ownerWasNotified = localStorage.getItem(ownerNotificationKey);
+
+                    if (!ownerWasNotified) {
+                        // Store in database or send through your notification system to the owner
+                        // This is just a placeholder - implement according to your notification system
+                        console.log(`Notification for owner: Task "${task.title}" has been completed`);
+                        localStorage.setItem(ownerNotificationKey, new Date().toISOString());
+                    }
+                }
+            }
         } catch (error) {
             console.error('Error updating task status:', error);
             toast.error('Failed to update task status');
@@ -121,19 +152,21 @@ const TaskAssignmentSection = ({ projectId, members }) => {
             const startTime = new Date(currentTimer.startTime);
             const duration = Math.floor((endTime - startTime) / 1000);
 
-            // Save time record
+            // Save time record with both owner and assignee info
+            const task = tasks.find(t => t.id === taskId);
+            const newRecord = {
+                startTime: currentTimer.startTime,
+                endTime: endTime.toISOString(),
+                duration,
+                user: currentUser?.email,
+                taskTitle: task?.title || '',
+                owner: task?.createdBy,
+                assignee: task?.assignedTo
+            };
+
             const newRecords = {
                 ...timeRecords,
-                [taskId]: [
-                    ...(timeRecords[taskId] || []),
-                    {
-                        startTime: currentTimer.startTime,
-                        endTime: endTime.toISOString(),
-                        duration,
-                        user: currentUser?.email,
-                        taskTitle: tasks.find(t => t.id === taskId)?.title || ''
-                    }
-                ]
+                [taskId]: [...(timeRecords[taskId] || []), newRecord]
             };
 
             setTimeRecords(newRecords);
@@ -146,47 +179,69 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                 return newTimers;
             });
             localStorage.setItem('activeTimers', JSON.stringify({}));
+
+            // Notify owner if different from current user
+            if (task?.createdBy !== currentUser?.email) {
+                const timeNotificationKey = `time_update_${taskId}_${Date.now()}`;
+                if (!localStorage.getItem(timeNotificationKey)) {
+                    // This would be replaced with your actual notification system
+                    console.log(`Time update for owner: Task "${task?.title}" worked for ${formatTimeTracking(duration)}`);
+                    localStorage.setItem(timeNotificationKey, 'true');
+                }
+            }
         } else {
             // Start timer
             const startTime = new Date();
             startTimerInterval(taskId, startTime);
+            const task = tasks.find(t => t.id === taskId);
             localStorage.setItem('activeTimers', JSON.stringify({
                 [taskId]: {
                     startTime: startTime.toISOString(),
                     isRunning: true,
-                    taskTitle: tasks.find(t => t.id === taskId)?.title || ''
+                    taskTitle: task?.title || '',
+                    owner: task?.createdBy,
+                    assignee: task?.assignedTo
                 }
             }));
         }
     };
 
-    // Load saved time records on mount
+    // Load saved time records on mount with improved sync
     useEffect(() => {
-        const savedRecords = localStorage.getItem('taskTimeRecords');
-        if (savedRecords) {
-            try {
-                const records = JSON.parse(savedRecords);
-                setTimeRecords(records);
-            } catch (error) {
-                console.error('Error loading time records:', error);
-            }
-        }
-
-        // Start intervals for any active timers
-        const active = JSON.parse(localStorage.getItem('activeTimers') || '{}');
-        Object.entries(active).forEach(([taskId, timer]) => {
-            if (timer.isRunning) {
-                startTimerInterval(taskId, new Date(timer.startTime));
-            }
-        });
-
-        return () => {
-            Object.values(activeTimers).forEach(timer => {
-                if (timer.interval) {
-                    clearInterval(timer.interval);
+        const loadTimeRecords = () => {
+            const savedRecords = localStorage.getItem('taskTimeRecords');
+            if (savedRecords) {
+                try {
+                    const records = JSON.parse(savedRecords);
+                    setTimeRecords(records);
+                } catch (error) {
+                    console.error('Error loading time records:', error);
                 }
+            }
+
+            // Load active timers
+            const active = JSON.parse(localStorage.getItem('activeTimers') || '{}');
+            setActiveTimers(prev => {
+                const newTimers = {};
+                Object.entries(active).forEach(([taskId, timer]) => {
+                    if (timer.isRunning) {
+                        const startTime = new Date(timer.startTime);
+                        const elapsed = Math.floor((new Date() - startTime) / 1000);
+                        newTimers[taskId] = {
+                            ...timer,
+                            elapsed,
+                            startTime: timer.startTime
+                        };
+                    }
+                });
+                return newTimers;
             });
         };
+
+        loadTimeRecords();
+        // Update more frequently to keep time in sync
+        const interval = setInterval(loadTimeRecords, 1000);
+        return () => clearInterval(interval);
     }, []);
 
     const startTimerInterval = (taskId, startTime) => {
@@ -225,10 +280,21 @@ const TaskAssignmentSection = ({ projectId, members }) => {
     // Get total time for a task
     const getTaskTotalTime = (taskId) => {
         const records = timeRecords[taskId] || [];
-        const completedTime = records.reduce((total, record) => total + record.duration, 0);
-        const activeTimer = activeTimers[taskId];
+        const completedTime = records.reduce((total, record) => {
+            // Include time if user is owner, assignee, or the one who logged the time
+            if (record.owner === currentUser?.email ||
+                record.assignee === currentUser?.email ||
+                record.user === currentUser?.email) {
+                return total + record.duration;
+            }
+            return total;
+        }, 0);
 
-        if (activeTimer?.isRunning) {
+        const activeTimer = activeTimers[taskId];
+        if (activeTimer?.isRunning &&
+            (activeTimer.owner === currentUser?.email ||
+                activeTimer.assignee === currentUser?.email ||
+                activeTimer.user === currentUser?.email)) {
             const startTime = new Date(activeTimer.startTime);
             const activeTime = Math.floor((new Date() - startTime) / 1000);
             return completedTime + activeTime;
@@ -444,6 +510,38 @@ const TaskAssignmentSection = ({ projectId, members }) => {
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
+    const formatDeadlineCountdown = (deadline) => {
+        const now = new Date();
+        const diff = deadline - now;
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+        if (diff < 0) {
+            const overdueDays = Math.ceil(Math.abs(diff) / (1000 * 60 * 60 * 24));
+            return `${overdueDays}d overdue`;
+        }
+
+        if (days > 0) {
+            return `${days}d ${hours}h left`;
+        } else if (hours > 0) {
+            return `${hours}h ${minutes}m left`;
+        } else if (minutes > 0) {
+            return `${minutes}m left`;
+        } else {
+            return 'Due now';
+        }
+    };
+
+    // Add effect for countdown timer
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setCountdownTick(tick => tick + 1);
+        }, 60000); // Update every minute
+        return () => clearInterval(interval);
+    }, []);
+
     const renderPomodoroSettings = () => (
         <Modal
             isOpen={showPomodoroSettings}
@@ -574,115 +672,85 @@ const TaskAssignmentSection = ({ projectId, members }) => {
         };
     }, []);
 
-    // Replace the task timer section in the task list with this updated version
-    const renderTaskTimer = (task) => (
-        <div className="flex items-center gap-2">
-            <button
-                onClick={() => toggleTaskTimer(task.id)}
-                className={`px-3 py-1.5 text-sm rounded-md ${activeTimers[task.id]?.isRunning
-                    ? 'bg-destructive text-destructive-foreground'
-                    : 'bg-primary text-primary-foreground'
-                    }`}
-            >
-                {activeTimers[task.id]?.isRunning ? (
-                    <>
-                        <FiPause className="w-4 h-4 inline mr-1" />
-                        Stop Timer
-                    </>
-                ) : (
-                    <>
-                        <FiPlay className="w-4 h-4 inline mr-1" />
-                        Start Timer
-                    </>
-                )}
-            </button>
-            <span className="text-sm font-mono">
-                {formatTimeTracking(activeTimers[task.id]?.elapsed || 0)}
-            </span>
-            <span className="text-sm text-muted-foreground">
-                Total: {formatTimeTracking(getTaskTotalTime(task.id))}
-            </span>
-        </div>
-    );
+    // Update the timer display section
+    const renderTaskTimer = (task) => {
+        const totalTime = getTaskTotalTime(task.id);
+        const isOwnerOrEditor = task.createdBy === currentUser?.email || task.assignedTo === currentUser?.email;
 
-    // Update the task controls section in the task list
-    // Replace the existing task controls section with this updated version
-    const renderTaskControls = (task) => (
-        <div className="mt-4 flex flex-wrap items-center gap-4">
-            {/* Status Control */}
-            <select
-                value={task.status}
-                onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                className="px-3 py-1.5 text-sm bg-background border border-border rounded-md"
-            >
-                <option value="TODO">To Do</option>
-                <option value="IN_PROGRESS">In Progress</option>
-                <option value="COMPLETED">Completed</option>
-            </select>
-
-            {/* Time Tracking */}
-            <div className="flex items-center gap-2">
-                <button
-                    onClick={() => toggleTaskTimer(task.id)}
-                    className={`px-3 py-1.5 text-sm rounded-md flex items-center gap-1 ${activeTimers[task.id]?.isRunning
-                        ? 'bg-destructive text-destructive-foreground'
-                        : 'bg-primary text-primary-foreground'
-                        }`}
-                >
-                    {activeTimers[task.id]?.isRunning ? (
-                        <>
-                            <FiPause className="w-4 h-4" />
-                            Stop Timer
-                        </>
-                    ) : (
-                        <>
-                            <FiPlay className="w-4 h-4" />
-                            Start Timer
-                        </>
+        return (
+            <div className="mt-4 flex flex-col gap-2 p-3 bg-background/50 rounded-lg border border-border">
+                {/* Timer Controls */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        {task.assignedTo === currentUser?.email && (
+                            <button
+                                onClick={() => toggleTaskTimer(task.id)}
+                                className={`px-3 py-1.5 text-sm rounded-md flex items-center gap-1 ${activeTimers[task.id]?.isRunning
+                                    ? 'bg-destructive text-destructive-foreground'
+                                    : 'bg-primary text-primary-foreground'
+                                    }`}
+                            >
+                                {activeTimers[task.id]?.isRunning ? (
+                                    <>
+                                        <FiPause className="w-4 h-4" />
+                                        Stop Timer
+                                    </>
+                                ) : (
+                                    <>
+                                        <FiPlay className="w-4 h-4" />
+                                        Start Timer
+                                    </>
+                                )}
+                            </button>
+                        )}
+                        {activeTimers[task.id]?.isRunning && (
+                            <span className="px-2 py-1 text-xs bg-primary/20 text-primary rounded animate-pulse">
+                                Currently Working
+                            </span>
+                        )}
+                    </div>
+                    {isOwnerOrEditor && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-mono">
+                                Total Time: {formatTimeTracking(totalTime)}
+                            </span>
+                        </div>
                     )}
-                </button>
-                <div className="flex flex-col">
-                    <span className="text-sm font-mono">
-                        {formatTimeTracking(activeTimers[task.id]?.elapsed || 0)}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                        Total: {formatTimeTracking(getTaskTotalTime(task.id))}
-                    </span>
                 </div>
+
+                {/* Current Session */}
+                {(activeTimers[task.id]?.isRunning || activeTimers[task.id]?.elapsed > 0) && (
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Current Session:</span>
+                        <span className="font-mono">
+                            {formatTimeTracking(activeTimers[task.id]?.elapsed || 0)}
+                        </span>
+                    </div>
+                )}
+
+                {/* Time Records */}
+                {isOwnerOrEditor && timeRecords[task.id] && timeRecords[task.id].length > 0 && (
+                    <div className="mt-2 border-t border-border/50 pt-2">
+                        <div className="text-sm text-muted-foreground mb-1">Recent Sessions:</div>
+                        <div className="space-y-1">
+                            {timeRecords[task.id].slice(-3).map((record, index) => (
+                                <div key={index} className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">
+                                        {new Date(record.startTime).toLocaleString()}
+                                    </span>
+                                    <span className="font-mono">
+                                        {formatTimeTracking(record.duration)}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
-        </div>
-    );
-
-    // Add this function to handle subtask addition for existing tasks
-    const handleAddSubtaskToExisting = async (taskId) => {
-        if (!newSubtaskForExisting.trim()) return;
-
-        try {
-            const task = tasks.find(t => t.id === taskId);
-            if (!task) return;
-
-            const newSubtask = {
-                id: `subtask-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                title: newSubtaskForExisting.trim(),
-                completed: false
-            };
-
-            const updatedTask = {
-                ...task,
-                subtasks: [...(task.subtasks || []), newSubtask]
-            };
-
-            await updateTask(taskId, updatedTask);
-            setNewSubtaskForExisting('');
-            setEditingTaskId(null);
-            toast.success('Subtask added');
-        } catch (error) {
-            console.error('Error adding subtask:', error);
-            toast.error('Failed to add subtask');
-        }
+        );
     };
 
-    // Update the task card to include subtask management
+    // Add back the renderSubtasks function
     const renderSubtasks = (task) => (
         <div className="mt-4 border-t border-border pt-4">
             <div className="flex items-center justify-between mb-2">
@@ -748,6 +816,57 @@ const TaskAssignmentSection = ({ projectId, members }) => {
         </div>
     );
 
+    // Also add back the handleAddSubtaskToExisting function
+    const handleAddSubtaskToExisting = async (taskId) => {
+        if (!newSubtaskForExisting.trim()) return;
+
+        try {
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            const newSubtask = {
+                id: `subtask-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                title: newSubtaskForExisting.trim(),
+                completed: false
+            };
+
+            const updatedTask = {
+                ...task,
+                subtasks: [...(task.subtasks || []), newSubtask]
+            };
+
+            await updateTask(taskId, updatedTask);
+            setNewSubtaskForExisting('');
+            setEditingTaskId(null);
+            toast.success('Subtask added');
+        } catch (error) {
+            console.error('Error adding subtask:', error);
+            toast.error('Failed to add subtask');
+        }
+    };
+
+    // Update the status control section in the task card
+    const renderStatusControl = (task) => (
+        <div className="mt-4 flex items-center gap-2">
+            <label className="text-sm text-muted-foreground">Status:</label>
+            <select
+                value={task.status}
+                onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                className={`px-3 py-1.5 text-sm rounded-md border ${task.status === 'COMPLETED'
+                    ? 'bg-success/10 border-success/20 text-success'
+                    : task.status === 'IN_PROGRESS'
+                        ? 'bg-primary/10 border-primary/20 text-primary'
+                        : 'bg-background border-border text-muted-foreground'
+                    }`}
+            >
+                <option value="TODO">To Do</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="COMPLETED">Completed</option>
+            </select>
+        </div>
+    );
+
+    // Update the task card to include better status indicators
     return (
         <div className="bg-background p-6 rounded-lg border border-border">
             {/* Header */}
@@ -832,6 +951,8 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                         deadline > now &&
                         (deadline - now) / (1000 * 60 * 60 * 24) <= 2 &&
                         task.status !== 'COMPLETED';
+                    const totalTime = getTaskTotalTime(task.id);
+                    const isInProgress = activeTimers[task.id]?.isRunning || task.status === 'IN_PROGRESS';
 
                     return (
                         <div
@@ -840,9 +961,11 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                                 ? 'border-destructive/50 bg-destructive/5'
                                 : isCloseToDeadline
                                     ? 'border-warning/50 bg-warning/5'
-                                    : task.assignedTo === currentUser?.email
+                                    : isInProgress
                                         ? 'border-primary/50 bg-primary/5'
-                                        : 'border-border bg-card'
+                                        : task.status === 'COMPLETED'
+                                            ? 'border-success/50 bg-success/5'
+                                            : 'border-border bg-card'
                                 }`}
                         >
                             <div className="flex items-start justify-between gap-4">
@@ -864,8 +987,12 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                                                 Due Soon
                                             </span>
                                         )}
+                                        {isInProgress && !isOverdue && !isCloseToDeadline && (
+                                            <span className="px-2 py-1 text-xs bg-primary/20 text-primary rounded">
+                                                In Progress
+                                            </span>
+                                        )}
                                     </div>
-                                    <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
 
                                     {/* Task Details */}
                                     <div className="flex flex-wrap gap-3 text-sm">
@@ -882,66 +1009,33 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                                                 }`}>
                                                 <FiCalendar className="w-4 h-4" />
                                                 {deadline.toLocaleDateString()} {deadline.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                {isOverdue && ` (${Math.ceil((now - deadline) / (1000 * 60 * 60 * 24))}d overdue)`}
-                                                {isCloseToDeadline && ` (${Math.ceil((deadline - now) / (1000 * 60 * 60 * 24))}d left)`}
+                                                <span className="ml-1 font-medium">
+                                                    ({formatDeadlineCountdown(deadline)})
+                                                </span>
                                             </span>
                                         )}
-                                        <span className={`flex items-center gap-1 ${task.status === 'COMPLETED' ? 'text-success' : 'text-muted-foreground'
+                                        <span className={`flex items-center gap-1 ${task.status === 'COMPLETED'
+                                            ? 'text-success'
+                                            : isInProgress
+                                                ? 'text-primary'
+                                                : 'text-muted-foreground'
                                             }`}>
                                             <FiCheckCircle className="w-4 h-4" />
                                             {task.status}
                                         </span>
+                                        {(task.createdBy === currentUser?.email || task.assignedTo === currentUser?.email) && (
+                                            <span className="flex items-center gap-1 text-muted-foreground">
+                                                <FiClock className="w-4 h-4" />
+                                                Total: {formatTimeTracking(totalTime)}
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* Timer Display */}
-                                    {task.assignedTo === currentUser?.email && (
-                                        <div className="mt-4 flex items-center gap-4 p-3 bg-background/50 rounded-lg border border-border">
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={() => toggleTaskTimer(task.id)}
-                                                    className={`px-3 py-1.5 text-sm rounded-md flex items-center gap-1 ${activeTimers[task.id]?.isRunning
-                                                        ? 'bg-destructive text-destructive-foreground'
-                                                        : 'bg-primary text-primary-foreground'
-                                                        }`}
-                                                >
-                                                    {activeTimers[task.id]?.isRunning ? (
-                                                        <>
-                                                            <FiPause className="w-4 h-4" />
-                                                            Stop Timer
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <FiPlay className="w-4 h-4" />
-                                                            Start Timer
-                                                        </>
-                                                    )}
-                                                </button>
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-mono">
-                                                        Current: {formatTimeTracking(activeTimers[task.id]?.elapsed || 0)}
-                                                    </span>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        Total: {formatTimeTracking(getTaskTotalTime(task.id))}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+                                    {renderTaskTimer(task)}
 
-                                    {/* Status Control */}
-                                    {task.assignedTo === currentUser?.email && (
-                                        <div className="mt-4">
-                                            <select
-                                                value={task.status}
-                                                onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                                                className="px-3 py-1.5 text-sm bg-background border border-border rounded-md"
-                                            >
-                                                <option value="TODO">To Do</option>
-                                                <option value="IN_PROGRESS">In Progress</option>
-                                                <option value="COMPLETED">Completed</option>
-                                            </select>
-                                        </div>
-                                    )}
+                                    {/* Status Control - Replace the existing status control with the new one */}
+                                    {task.assignedTo === currentUser?.email && renderStatusControl(task)}
 
                                     {/* Subtasks */}
                                     {renderSubtasks(task)}

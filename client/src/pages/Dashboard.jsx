@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { FiPlus, FiFolder, FiClock, FiUsers, FiStar } from 'react-icons/fi';
+import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { db } from '../firebase/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { useAuth } from '../contexts/AuthContext';
-import { FiPlus } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
-import { celebrateApproval } from '../components/CelebrationEffects';
-import CreateProject from '../components/CreateProject';
+import CreateProjectModal from '../components/CreateProject';
 
 const ReviewStatusBadge = ({ status }) => {
   const statusStyles = {
@@ -30,190 +30,199 @@ const ReviewStatusBadge = ({ status }) => {
   );
 };
 
-const ProjectCard = ({ project }) => {
-  const fileTypes = project.files?.map(f => f.type?.split('/')[1]?.toUpperCase()) || [];
-  const uniqueTypes = [...new Set(fileTypes)];
-  const fileCount = project.files?.length || 0;
-
-  const formatDate = (date) => {
-    if (!date) return '';
-    try {
-      if (typeof date === 'string') {
-        return new Date(date).toLocaleDateString();
-      }
-      if (date.toDate) {
-        return date.toDate().toLocaleDateString();
-      }
-      return '';
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return '';
-    }
-  };
-
-  const status = project.status || 'PENDING';
-
-  return (
-    <Link
-      to={`/project/${project.id}`}
-      className="block p-6 bg-foreground backdrop-blur-lg border border-border rounded-lg hover:bg-muted transition-all"
-    >
-      <div className="flex justify-between items-start mb-3">
-        <h3 className="text-lg font-semibold text-secondary-foreground">{project.name}</h3>
-        <ReviewStatusBadge status={status} />
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-muted-foreground">{fileCount} files</span>
-          <div className="flex items-center gap-1">
-            {uniqueTypes.map(type => (
-              <span
-                key={type}
-                className="px-2 py-0.5 bg-muted text-secondary-foreground rounded text-xs"
-              >
-                {type}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {project.lastReviewedAt && (
-        <div className="mt-3 text-xs text-muted-foreground">
-          Last reviewed {formatDate(project.lastReviewedAt)}
-          {project.lastReviewedBy && ` by ${project.lastReviewedBy}`}
-        </div>
-      )}
-    </Link>
-  );
-};
-
 const Dashboard = () => {
   const { currentUser } = useAuth();
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [recentStatusChange, setRecentStatusChange] = useState(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const { theme } = useTheme();
   const navigate = useNavigate();
+  const [projects, setProjects] = React.useState({
+    owned: [],
+    joined: []
+  });
+  const [loading, setLoading] = React.useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
 
-  useEffect(() => {
-    const loadProjects = async () => {
+  const renderProjectCard = (project, type) => (
+    <div
+      key={project.id}
+      onClick={() => navigate(`/project/${project.id}`)}
+      className="group bg-card hover:bg-accent/5 p-4 rounded-lg border border-input hover:border-accent transition-colors"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-2">
+            <FiFolder className="w-5 h-5 text-primary" />
+            <h3 className="font-medium text-primary group-hover:text-primary/90">{project.name}</h3>
+            {type === 'owned' && (
+              <span className="px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full">
+                Owner
+              </span>
+            )}
+          </div>
+
+          {/* Status Badge */}
+          <div className="mb-2">
+            <ReviewStatusBadge status={project.status} />
+          </div>
+
+          <p className="text-sm text-muted-foreground mb-4">
+            {project.description || 'No description'}
+          </p>
+
+          <div className="flex flex-wrap gap-3 text-sm">
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <FiUsers className="w-4 h-4" />
+              {project.members?.length || 1} members
+            </span>
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <FiClock className="w-4 h-4" />
+              Created {new Date(project.createdAt).toLocaleDateString()}
+            </span>
+            {project.lastActive && (
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <FiStar className="w-4 h-4" />
+                Last active {new Date(project.lastActive).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+
+          {/* Files Information */}
+          {project.files && project.files.length > 0 && (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                {project.files.length} files
+              </span>
+              <div className="flex items-center gap-1">
+                {[...new Set(project.files.map(f => f.type?.split('/')[1]?.toUpperCase()))].map(type => (
+                  <span key={type} className="px-2 py-0.5 bg-accent/50 text-accent-foreground rounded text-xs">
+                    {type}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  React.useEffect(() => {
+    const fetchProjects = async () => {
       if (!currentUser?.email) return;
 
       try {
+        setLoading(true);
         const projectsRef = collection(db, 'projects');
-        const q = query(
-          projectsRef,
-          where('owner', '==', currentUser.email)
-        );
 
-        const querySnapshot = await getDocs(q);
-        const projectsData = querySnapshot.docs.map(doc => ({
+        // Get all projects
+        const projectsSnapshot = await getDocs(projectsRef);
+
+        // Filter owned and joined projects
+        const allProjects = projectsSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
 
-        // Check for recent status changes (within last 5 minutes)
-        const recentlyChanged = projectsData.find(project => {
-          if (!project.lastReviewedAt) return false;
-          const reviewTime = typeof project.lastReviewedAt === 'string'
-            ? new Date(project.lastReviewedAt)
-            : project.lastReviewedAt.toDate?.() || new Date();
-          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-          return reviewTime > fiveMinutesAgo;
+        const ownedProjects = allProjects.filter(project =>
+          project.owner === currentUser.email
+        );
+
+        const joinedProjects = allProjects.filter(project =>
+          project.owner !== currentUser.email &&
+          project.members?.some(member =>
+            member.email === currentUser.email
+          )
+        );
+
+        setProjects({
+          owned: ownedProjects,
+          joined: joinedProjects
         });
-
-        if (recentlyChanged) {
-          setRecentStatusChange(recentlyChanged.reviewStatus);
-          if (recentlyChanged.reviewStatus === 'APPROVED') {
-            celebrateApproval();
-          }
-          // Clear the status after celebration
-          setTimeout(() => setRecentStatusChange(null), 2000);
-        }
-
-        setProjects(projectsData);
       } catch (error) {
-        console.error('Error loading projects:', error);
+        console.error('Error fetching projects:', error);
         toast.error('Failed to load projects');
       } finally {
         setLoading(false);
       }
     };
 
-    loadProjects();
+    fetchProjects();
   }, [currentUser]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background pt-20 pb-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 w-48 bg-foreground rounded mb-4"></div>
-            <div className="h-4 w-96 bg-foreground rounded mb-8"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="h-48 bg-foreground rounded-lg"></div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <>
-      <div className="min-h-screen bg-background pt-20 pb-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold text-secondary-foreground mb-2">My Projects</h1>
-              <p className="text-muted-foreground">Manage and organize your design feedback</p>
-            </div>
-            <div className="flex gap-4">
-              <button
-                onClick={() => navigate('/join')}
-                className="inline-flex items-center px-4 py-2 bg-background text-primary border border-primary rounded-lg hover:bg-primary/10 transition-colors"
-              >
-                Join Project
-              </button>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors font-medium"
-              >
-                <FiPlus className="w-5 h-5 mr-2" />
-                Create Project
-              </button>
-            </div>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-primary">My Projects</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage and organize your design feedback
+            </p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projects.map(project => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/join')}
+              className="px-4 py-2 text-sm font-medium bg-card hover:bg-accent text-accent-foreground rounded-lg border border-input transition-colors"
+            >
+              Join Project
+            </button>
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors"
+            >
+              <FiPlus className="w-4 h-4" />
+              Create Project
+            </button>
           </div>
-
-          {projects.length === 0 && (
-            <div className="text-center py-12">
-              <h3 className="text-xl text-muted-foreground mb-4">No projects yet</h3>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors font-medium"
-              >
-                <FiPlus className="w-5 h-5 mr-2" />
-                Create Your First Project
-              </button>
-            </div>
-          )}
         </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {/* Your Projects */}
+            <section>
+              <h2 className="text-xl font-semibold text-primary mb-4">Your Projects</h2>
+              {projects.owned.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {projects.owned.map(project => renderProjectCard(project, 'owned'))}
+                </div>
+              ) : (
+                <div className="bg-card p-8 rounded-lg border border-input text-center">
+                  <p className="text-muted-foreground">You haven't created any projects yet.</p>
+                </div>
+              )}
+            </section>
+
+            {/* Joined Projects */}
+            <section>
+              <h2 className="text-xl font-semibold text-primary mb-4">Joined Projects</h2>
+              {projects.joined.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {projects.joined.map(project => renderProjectCard(project, 'joined'))}
+                </div>
+              ) : (
+                <div className="bg-card p-8 rounded-lg border border-input text-center">
+                  <p className="text-muted-foreground">You haven't joined any projects yet.</p>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
       </div>
 
-      {showCreateModal && (
-        <CreateProject onClose={() => setShowCreateModal(false)} />
+      {isCreateModalOpen && (
+        <CreateProjectModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onSuccess={(projectId) => {
+            setIsCreateModalOpen(false);
+            navigate(`/project/${projectId}`);
+          }}
+        />
       )}
-    </>
+    </div>
   );
 };
 

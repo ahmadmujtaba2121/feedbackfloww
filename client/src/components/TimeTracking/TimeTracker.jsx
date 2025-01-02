@@ -60,9 +60,17 @@ const TimeTracker = () => {
 
   const getTotalTime = (taskId) => {
     const records = timeRecords[taskId] || [];
-    const completedTime = records.reduce((total, record) => total + record.duration, 0);
-    const activeTimer = activeTimers[taskId];
+    const completedTime = records.reduce((total, record) => {
+      // Include time if user is owner, assignee, or the one who logged the time
+      if (record.owner === currentUser?.email ||
+        record.assignee === currentUser?.email ||
+        record.user === currentUser?.email) {
+        return total + record.duration;
+      }
+      return total;
+    }, 0);
 
+    const activeTimer = activeTimers[taskId];
     if (activeTimer?.isRunning) {
       const startTime = new Date(activeTimer.startTime);
       const activeTime = Math.floor((new Date() - startTime) / 1000);
@@ -76,7 +84,10 @@ const TimeTracker = () => {
     let total = 0;
     Object.entries(timeRecords).forEach(([taskId, records]) => {
       records.forEach(record => {
-        if (record.user === currentUser?.email) {
+        // Include time if user is owner, assignee, or the one who logged the time
+        if (record.owner === currentUser?.email ||
+          record.assignee === currentUser?.email ||
+          record.user === currentUser?.email) {
           total += record.duration;
         }
       });
@@ -84,7 +95,10 @@ const TimeTracker = () => {
 
     // Add active times
     Object.entries(activeTimers).forEach(([taskId, timer]) => {
-      if (timer.isRunning) {
+      if (timer.isRunning &&
+        (timer.owner === currentUser?.email ||
+          timer.assignee === currentUser?.email ||
+          timer.user === currentUser?.email)) {
         const startTime = new Date(timer.startTime);
         const activeTime = Math.floor((new Date() - startTime) / 1000);
         total += activeTime;
@@ -98,22 +112,32 @@ const TimeTracker = () => {
   const groupedTasks = tasks.reduce((acc, task) => {
     const records = timeRecords[task.id] || [];
     const activeTimer = activeTimers[task.id];
+    const isRelevantToUser = task.createdBy === currentUser?.email ||
+      task.assignedTo === currentUser?.email;
 
-    if (records.length === 0 && !activeTimer?.isRunning) return acc;
+    // Only process if there are records or active timer AND user is relevant
+    if ((records.length > 0 || activeTimer?.isRunning) && isRelevantToUser) {
+      records.forEach(record => {
+        if (record.owner === currentUser?.email ||
+          record.assignee === currentUser?.email ||
+          record.user === currentUser?.email) {
+          const date = new Date(record.startTime).toLocaleDateString();
+          if (!acc[date]) acc[date] = [];
+          if (!acc[date].find(t => t.id === task.id)) {
+            acc[date].push(task);
+          }
+        }
+      });
 
-    records.forEach(record => {
-      const date = new Date(record.startTime).toLocaleDateString();
-      if (!acc[date]) acc[date] = [];
-      if (!acc[date].find(t => t.id === task.id)) {
-        acc[date].push(task);
-      }
-    });
-
-    if (activeTimer?.isRunning) {
-      const date = new Date(activeTimer.startTime).toLocaleDateString();
-      if (!acc[date]) acc[date] = [];
-      if (!acc[date].find(t => t.id === task.id)) {
-        acc[date].push(task);
+      if (activeTimer?.isRunning &&
+        (activeTimer.owner === currentUser?.email ||
+          activeTimer.assignee === currentUser?.email ||
+          activeTimer.user === currentUser?.email)) {
+        const date = new Date(activeTimer.startTime).toLocaleDateString();
+        if (!acc[date]) acc[date] = [];
+        if (!acc[date].find(t => t.id === task.id)) {
+          acc[date].push(task);
+        }
       }
     }
 
