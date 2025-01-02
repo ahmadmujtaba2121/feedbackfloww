@@ -3,50 +3,57 @@ import { FiPlay, FiPause, FiClock, FiUser, FiCalendar, FiCheckCircle, FiBarChart
 import { useTask } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
+import { db } from '../../firebase/firebase';
+import { doc, getDoc, updateDoc, onSnapshot, arrayUnion, serverTimestamp } from 'firebase/firestore';
 
-const TimeTracker = () => {
+const TimeTracker = ({ projectId }) => {
   const { tasks, updateTask } = useTask();
   const { currentUser } = useAuth();
   const [timeRecords, setTimeRecords] = useState({});
   const [activeTimers, setActiveTimers] = useState({});
   const [lastUpdate, setLastUpdate] = useState(Date.now());
 
-  // Load saved time records and active timers
+  // Load time records from Firebase
   useEffect(() => {
-    const loadTimeRecords = () => {
-      const savedRecords = localStorage.getItem('taskTimeRecords');
-      if (savedRecords) {
-        try {
-          const records = JSON.parse(savedRecords);
-          setTimeRecords(records);
-        } catch (error) {
-          console.error('Error loading time records:', error);
+    if (!projectId) return;
+
+    const projectRef = doc(db, 'projects', projectId);
+    const unsubscribe = onSnapshot(projectRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data();
+        // Initialize timeRecords for all tasks if they don't exist
+        const initializedTimeRecords = {};
+        tasks.forEach(task => {
+          initializedTimeRecords[task.id] = data.timeRecords?.[task.id] || [];
+        });
+        setTimeRecords(initializedTimeRecords);
+
+        if (data.activeTimers) {
+          const newTimers = {};
+          Object.entries(data.activeTimers).forEach(([taskId, timer]) => {
+            if (timer && timer.isRunning) {
+              const startTime = new Date(timer.startTime);
+              const elapsed = Math.floor((new Date() - startTime) / 1000);
+              newTimers[taskId] = {
+                ...timer,
+                elapsed,
+                startTime: timer.startTime
+              };
+            }
+          });
+          setActiveTimers(newTimers);
         }
       }
+    });
 
-      // Load active timers
-      const active = JSON.parse(localStorage.getItem('activeTimers') || '{}');
-      setActiveTimers(prev => {
-        const newTimers = {};
-        Object.entries(active).forEach(([taskId, timer]) => {
-          if (timer.isRunning) {
-            const startTime = new Date(timer.startTime);
-            const elapsed = Math.floor((new Date() - startTime) / 1000);
-            newTimers[taskId] = {
-              ...timer,
-              elapsed,
-              startTime: timer.startTime
-            };
-          }
-        });
-        return newTimers;
-      });
+    return () => unsubscribe();
+  }, [projectId, tasks]);
 
+  // Update active timers every second
+  useEffect(() => {
+    const interval = setInterval(() => {
       setLastUpdate(Date.now());
-    };
-
-    loadTimeRecords();
-    const interval = setInterval(loadTimeRecords, 1000);
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -61,13 +68,7 @@ const TimeTracker = () => {
   const getTotalTime = (taskId) => {
     const records = timeRecords[taskId] || [];
     const completedTime = records.reduce((total, record) => {
-      // Include time if user is owner, assignee, or the one who logged the time
-      if (record.owner === currentUser?.email ||
-        record.assignee === currentUser?.email ||
-        record.user === currentUser?.email) {
-        return total + record.duration;
-      }
-      return total;
+      return total + (record.duration || 0);
     }, 0);
 
     const activeTimer = activeTimers[taskId];
@@ -84,21 +85,12 @@ const TimeTracker = () => {
     let total = 0;
     Object.entries(timeRecords).forEach(([taskId, records]) => {
       records.forEach(record => {
-        // Include time if user is owner, assignee, or the one who logged the time
-        if (record.owner === currentUser?.email ||
-          record.assignee === currentUser?.email ||
-          record.user === currentUser?.email) {
-          total += record.duration;
-        }
+        total += (record.duration || 0);
       });
     });
 
-    // Add active times
     Object.entries(activeTimers).forEach(([taskId, timer]) => {
-      if (timer.isRunning &&
-        (timer.owner === currentUser?.email ||
-          timer.assignee === currentUser?.email ||
-          timer.user === currentUser?.email)) {
+      if (timer?.isRunning) {
         const startTime = new Date(timer.startTime);
         const activeTime = Math.floor((new Date() - startTime) / 1000);
         total += activeTime;
@@ -108,36 +100,90 @@ const TimeTracker = () => {
     return total;
   };
 
+  const startTimer = async (taskId) => {
+    try {
+      const projectRef = doc(db, 'projects', projectId);
+      const newTimer = {
+        isRunning: true,
+        startTime: new Date().toISOString(),
+        user: currentUser.email,
+        taskId
+      };
+
+      await updateDoc(projectRef, {
+        [`activeTimers.${taskId}`]: newTimer,
+        lastModified: serverTimestamp()
+      });
+
+      toast.success('Timer started');
+    } catch (error) {
+      console.error('Error starting timer:', error);
+      toast.error('Failed to start timer');
+    }
+  };
+
+  const stopTimer = async (taskId) => {
+    try {
+      const projectRef = doc(db, 'projects', projectId);
+      const timer = activeTimers[taskId];
+
+      if (timer && timer.isRunning) {
+        const startTime = new Date(timer.startTime);
+        const duration = Math.floor((new Date() - startTime) / 1000);
+
+        const timeRecord = {
+          startTime: timer.startTime,
+          endTime: new Date().toISOString(),
+          duration,
+          user: timer.user,
+          taskId
+        };
+
+        // Get current time records for the task
+        const projectDoc = await getDoc(projectRef);
+        const currentRecords = projectDoc.data()?.timeRecords?.[taskId] || [];
+
+        await updateDoc(projectRef, {
+          [`timeRecords.${taskId}`]: [...currentRecords, timeRecord],
+          [`activeTimers.${taskId}`]: null,
+          lastModified: serverTimestamp()
+        });
+
+        toast.success('Timer stopped');
+      }
+    } catch (error) {
+      console.error('Error stopping timer:', error);
+      toast.error('Failed to stop timer');
+    }
+  };
+
   // Group tasks by date
   const groupedTasks = tasks.reduce((acc, task) => {
     const records = timeRecords[task.id] || [];
     const activeTimer = activeTimers[task.id];
-    const isRelevantToUser = task.createdBy === currentUser?.email ||
-      task.assignedTo === currentUser?.email;
 
-    // Only process if there are records or active timer AND user is relevant
-    if ((records.length > 0 || activeTimer?.isRunning) && isRelevantToUser) {
-      records.forEach(record => {
-        if (record.owner === currentUser?.email ||
-          record.assignee === currentUser?.email ||
-          record.user === currentUser?.email) {
-          const date = new Date(record.startTime).toLocaleDateString();
-          if (!acc[date]) acc[date] = [];
-          if (!acc[date].find(t => t.id === task.id)) {
-            acc[date].push(task);
-          }
-        }
-      });
+    records.forEach(record => {
+      const date = new Date(record.startTime).toLocaleDateString();
+      if (!acc[date]) acc[date] = [];
+      if (!acc[date].find(t => t.id === task.id)) {
+        acc[date].push(task);
+      }
+    });
 
-      if (activeTimer?.isRunning &&
-        (activeTimer.owner === currentUser?.email ||
-          activeTimer.assignee === currentUser?.email ||
-          activeTimer.user === currentUser?.email)) {
-        const date = new Date(activeTimer.startTime).toLocaleDateString();
-        if (!acc[date]) acc[date] = [];
-        if (!acc[date].find(t => t.id === task.id)) {
-          acc[date].push(task);
-        }
+    if (activeTimer?.isRunning) {
+      const date = new Date(activeTimer.startTime).toLocaleDateString();
+      if (!acc[date]) acc[date] = [];
+      if (!acc[date].find(t => t.id === task.id)) {
+        acc[date].push(task);
+      }
+    }
+
+    // Add tasks with no records but assigned to current user
+    if (task.assignedTo === currentUser?.email && !records.length && !activeTimer) {
+      const today = new Date().toLocaleDateString();
+      if (!acc[today]) acc[today] = [];
+      if (!acc[today].find(t => t.id === task.id)) {
+        acc[today].push(task);
       }
     }
 
@@ -174,7 +220,7 @@ const TimeTracker = () => {
                       dateRecords.push({
                         startTime: activeTimer.startTime,
                         duration: Math.floor((new Date() - startTime) / 1000),
-                        user: currentUser?.email,
+                        user: activeTimer.user,
                         isActive: true
                       });
                     }
@@ -194,7 +240,6 @@ const TimeTracker = () => {
                             </span>
                           </div>
 
-                          {/* Task Details */}
                           <div className="flex flex-wrap gap-3 text-sm mb-4">
                             <span className="flex items-center gap-1 text-muted-foreground">
                               <FiUser className="w-4 h-4" />
@@ -212,13 +257,15 @@ const TimeTracker = () => {
                             </span>
                           </div>
 
-                          {/* Time Records */}
                           <div className="space-y-2">
                             {dateRecords.map((record, index) => (
                               <div key={index} className="flex items-center justify-between text-sm">
                                 <div className="flex items-center gap-2">
                                   <span className="text-muted-foreground">
                                     {new Date(record.startTime).toLocaleTimeString()}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    by {record.user}
                                   </span>
                                   {record.isActive && (
                                     <span className="px-2 py-0.5 text-xs bg-primary/20 text-primary rounded">
@@ -232,6 +279,28 @@ const TimeTracker = () => {
                               </div>
                             ))}
                           </div>
+
+                          {(task.assignedTo === currentUser?.email || task.createdBy === currentUser?.email) && (
+                            <div className="mt-4 flex justify-end">
+                              {activeTimers[task.id]?.isRunning ? (
+                                <button
+                                  onClick={() => stopTimer(task.id)}
+                                  className="flex items-center gap-2 px-3 py-1 bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 transition-colors"
+                                >
+                                  <FiPause className="w-4 h-4" />
+                                  Stop Timer
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => startTimer(task.id)}
+                                  className="flex items-center gap-2 px-3 py-1 bg-primary/20 text-primary rounded hover:bg-primary/30 transition-colors"
+                                >
+                                  <FiPlay className="w-4 h-4" />
+                                  Start Timer
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

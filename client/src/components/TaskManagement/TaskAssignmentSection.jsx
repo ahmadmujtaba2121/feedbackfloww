@@ -5,7 +5,7 @@ import { useTask } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { db } from '../../firebase/firebase';
-import { doc, updateDoc, arrayUnion, serverTimestamp, getDoc, setDoc } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, serverTimestamp, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import Modal from '../../components/Modal';
 
 const TaskAssignmentSection = ({ projectId, members }) => {
@@ -142,19 +142,26 @@ const TaskAssignmentSection = ({ projectId, members }) => {
         }
     };
 
-    const toggleTaskTimer = (taskId) => {
+    const toggleTaskTimer = async (taskId) => {
         const currentTimer = activeTimers[taskId];
 
         if (currentTimer?.isRunning) {
             // Stop timer
-            clearInterval(currentTimer.interval);
+            if (currentTimer.interval) {
+                clearInterval(currentTimer.interval);
+            }
             const endTime = new Date();
             const startTime = new Date(currentTimer.startTime);
             const duration = Math.floor((endTime - startTime) / 1000);
 
             // Save time record with both owner and assignee info
             const task = tasks.find(t => t.id === taskId);
-            const newRecord = {
+            if (!task) {
+                console.error('Task not found:', taskId);
+                return;
+            }
+
+            const timeRecord = {
                 startTime: currentTimer.startTime,
                 endTime: endTime.toISOString(),
                 duration,
@@ -164,109 +171,149 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                 assignee: task?.assignedTo
             };
 
-            const newRecords = {
-                ...timeRecords,
-                [taskId]: [...(timeRecords[taskId] || []), newRecord]
-            };
+            try {
+                // Get current task data first
+                const projectRef = doc(db, 'projects', projectId);
+                const docSnap = await getDoc(projectRef);
 
-            setTimeRecords(newRecords);
-            localStorage.setItem('taskTimeRecords', JSON.stringify(newRecords));
-
-            // Clear active timer
-            setActiveTimers(current => {
-                const newTimers = { ...current };
-                delete newTimers[taskId];
-                return newTimers;
-            });
-            localStorage.setItem('activeTimers', JSON.stringify({}));
-
-            // Notify owner if different from current user
-            if (task?.createdBy !== currentUser?.email) {
-                const timeNotificationKey = `time_update_${taskId}_${Date.now()}`;
-                if (!localStorage.getItem(timeNotificationKey)) {
-                    // This would be replaced with your actual notification system
-                    console.log(`Time update for owner: Task "${task?.title}" worked for ${formatTimeTracking(duration)}`);
-                    localStorage.setItem(timeNotificationKey, 'true');
+                if (!docSnap.exists()) {
+                    throw new Error('Project not found');
                 }
+
+                const projectData = docSnap.data();
+                const currentTasks = [...(projectData.tasks || [])];
+                const taskIndex = currentTasks.findIndex(t => t.id === taskId);
+
+                if (taskIndex === -1) {
+                    throw new Error('Task not found in project data');
+                }
+
+                // Update task with new time record
+                const updatedTask = {
+                    ...currentTasks[taskIndex],
+                    timeRecords: [...(currentTasks[taskIndex].timeRecords || []), timeRecord],
+                    totalTime: (currentTasks[taskIndex].totalTime || 0) + duration
+                };
+                currentTasks[taskIndex] = updatedTask;
+
+                // Update in Firestore
+                await updateDoc(projectRef, {
+                    tasks: currentTasks,
+                    [`activeTimers.${taskId}`]: null,
+                    lastModified: serverTimestamp()
+                });
+
+                // Update local time records immediately
+                setTimeRecords(current => ({
+                    ...current,
+                    [taskId]: [...(current[taskId] || []), timeRecord].sort((a, b) =>
+                        new Date(b.startTime) - new Date(a.startTime)
+                    )
+                }));
+
+                // Clear active timer locally
+                setActiveTimers(current => {
+                    const newTimers = { ...current };
+                    delete newTimers[taskId];
+                    return newTimers;
+                });
+
+                toast.success('Time tracking stopped and saved successfully');
+            } catch (error) {
+                console.error('Error saving time record:', error);
+                toast.error('Failed to save time record');
             }
         } else {
-            // Start timer
+            // Start timer logic remains the same
             const startTime = new Date();
-            startTimerInterval(taskId, startTime);
             const task = tasks.find(t => t.id === taskId);
-            localStorage.setItem('activeTimers', JSON.stringify({
-                [taskId]: {
+            if (!task) {
+                console.error('Task not found:', taskId);
+                return;
+            }
+
+            // Save timer state to Firestore
+            const projectRef = doc(db, 'projects', projectId);
+            updateDoc(projectRef, {
+                [`activeTimers.${taskId}`]: {
                     startTime: startTime.toISOString(),
                     isRunning: true,
+                    user: currentUser?.email,
                     taskTitle: task?.title || '',
                     owner: task?.createdBy,
                     assignee: task?.assignedTo
-                }
-            }));
+                },
+                lastModified: serverTimestamp()
+            }).then(() => {
+                startTimerInterval(taskId, startTime.toISOString());
+                toast.success('Time tracking started');
+            }).catch(error => {
+                console.error('Error starting timer:', error);
+                toast.error('Failed to start timer');
+            });
         }
     };
 
-    // Load saved time records on mount with improved sync
+    // Load time records and active timers from Firestore
     useEffect(() => {
-        const loadTimeRecords = () => {
-            const savedRecords = localStorage.getItem('taskTimeRecords');
-            if (savedRecords) {
-                try {
-                    const records = JSON.parse(savedRecords);
-                    setTimeRecords(records);
-                } catch (error) {
-                    console.error('Error loading time records:', error);
-                }
-            }
+        if (!projectId || !tasks.length) return;
 
-            // Load active timers
-            const active = JSON.parse(localStorage.getItem('activeTimers') || '{}');
-            setActiveTimers(prev => {
-                const newTimers = {};
-                Object.entries(active).forEach(([taskId, timer]) => {
-                    if (timer.isRunning) {
-                        const startTime = new Date(timer.startTime);
-                        const elapsed = Math.floor((new Date() - startTime) / 1000);
-                        newTimers[taskId] = {
-                            ...timer,
-                            elapsed,
-                            startTime: timer.startTime
-                        };
+        const projectRef = doc(db, 'projects', projectId);
+        const unsubscribe = onSnapshot(projectRef, (doc) => {
+            if (doc.exists()) {
+                const data = doc.data();
+
+                // Update active timers
+                const activeTimersData = data.activeTimers || {};
+                Object.entries(activeTimersData).forEach(([taskId, timer]) => {
+                    if (timer?.isRunning) {
+                        const startTime = timer.startTime;
+                        // Only start interval if timer is not already running for this user
+                        if (!activeTimers[taskId]?.isRunning || timer.user === currentUser?.email) {
+                            // Clear existing interval if any
+                            if (activeTimers[taskId]?.interval) {
+                                clearInterval(activeTimers[taskId].interval);
+                            }
+                            startTimerInterval(taskId, startTime);
+                        }
+                    } else {
+                        // Clear interval if timer is not running
+                        if (activeTimers[taskId]?.interval) {
+                            clearInterval(activeTimers[taskId].interval);
+                            setActiveTimers(current => {
+                                const newTimers = { ...current };
+                                delete newTimers[taskId];
+                                return newTimers;
+                            });
+                        }
                     }
                 });
-                return newTimers;
+
+                // Update time records from tasks
+                const tasksData = data.tasks || [];
+                const newTimeRecords = {};
+                tasksData.forEach(task => {
+                    if (task.timeRecords) {
+                        const sortedRecords = [...task.timeRecords].sort((a, b) =>
+                            new Date(b.startTime) - new Date(a.startTime)
+                        );
+                        newTimeRecords[task.id] = sortedRecords;
+                    }
+                });
+                setTimeRecords(newTimeRecords);
+            }
+        });
+
+        return () => {
+            unsubscribe();
+            // Clear all intervals
+            Object.values(activeTimers).forEach(timer => {
+                if (timer?.interval) {
+                    clearInterval(timer.interval);
+                }
             });
         };
-
-        loadTimeRecords();
-        // Update more frequently to keep time in sync
-        const interval = setInterval(loadTimeRecords, 1000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const startTimerInterval = (taskId, startTime) => {
-        const interval = setInterval(() => {
-            setActiveTimers(current => ({
-                ...current,
-                [taskId]: {
-                    startTime: startTime.toISOString(),
-                    elapsed: Math.floor((new Date() - startTime) / 1000),
-                    isRunning: true,
-                    interval
-                }
-            }));
-        }, 1000);
-
-        setActiveTimers(current => ({
-            ...current,
-            [taskId]: {
-                startTime: startTime.toISOString(),
-                elapsed: 0,
-                isRunning: true,
-                interval
-            }
-        }));
-    };
+    }, [projectId, tasks]);
 
     // Format time for display
     const formatTimeTracking = (seconds) => {
@@ -279,22 +326,13 @@ const TaskAssignmentSection = ({ projectId, members }) => {
 
     // Get total time for a task
     const getTaskTotalTime = (taskId) => {
-        const records = timeRecords[taskId] || [];
-        const completedTime = records.reduce((total, record) => {
-            // Include time if user is owner, assignee, or the one who logged the time
-            if (record.owner === currentUser?.email ||
-                record.assignee === currentUser?.email ||
-                record.user === currentUser?.email) {
-                return total + record.duration;
-            }
-            return total;
-        }, 0);
+        const task = tasks.find(t => t.id === taskId);
+        if (!task) return 0;
 
+        const completedTime = task.totalTime || 0;
         const activeTimer = activeTimers[taskId];
-        if (activeTimer?.isRunning &&
-            (activeTimer.owner === currentUser?.email ||
-                activeTimer.assignee === currentUser?.email ||
-                activeTimer.user === currentUser?.email)) {
+
+        if (activeTimer?.isRunning) {
             const startTime = new Date(activeTimer.startTime);
             const activeTime = Math.floor((new Date() - startTime) / 1000);
             return completedTime + activeTime;
@@ -672,10 +710,24 @@ const TaskAssignmentSection = ({ projectId, members }) => {
         };
     }, []);
 
-    // Update the timer display section
+    // Format time records date
+    const formatRecordDate = (dateString) => {
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) {
+                return 'Invalid Date';
+            }
+            return date.toLocaleString();
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return 'Invalid Date';
+        }
+    };
+
+    // Update the time records section in renderTaskTimer
     const renderTaskTimer = (task) => {
         const totalTime = getTaskTotalTime(task.id);
-        const isOwnerOrEditor = task.createdBy === currentUser?.email || task.assignedTo === currentUser?.email;
+        const isOwnerOrAssignee = task.createdBy === currentUser?.email || task.assignedTo === currentUser?.email;
 
         return (
             <div className="mt-4 flex flex-col gap-2 p-3 bg-background/50 rounded-lg border border-border">
@@ -705,21 +757,19 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                         )}
                         {activeTimers[task.id]?.isRunning && (
                             <span className="px-2 py-1 text-xs bg-primary/20 text-primary rounded animate-pulse">
-                                Currently Working
+                                {activeTimers[task.id]?.user === currentUser?.email ? 'Currently Working' : `${activeTimers[task.id]?.user || 'Someone'} is working`}
                             </span>
                         )}
                     </div>
-                    {isOwnerOrEditor && (
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-mono">
-                                Total Time: {formatTimeTracking(totalTime)}
-                            </span>
-                        </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono">
+                            Total Time: {formatTimeTracking(totalTime)}
+                        </span>
+                    </div>
                 </div>
 
                 {/* Current Session */}
-                {(activeTimers[task.id]?.isRunning || activeTimers[task.id]?.elapsed > 0) && (
+                {activeTimers[task.id]?.isRunning && (
                     <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Current Session:</span>
                         <span className="font-mono">
@@ -729,14 +779,14 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                 )}
 
                 {/* Time Records */}
-                {isOwnerOrEditor && timeRecords[task.id] && timeRecords[task.id].length > 0 && (
+                {timeRecords[task.id] && timeRecords[task.id].length > 0 && (
                     <div className="mt-2 border-t border-border/50 pt-2">
                         <div className="text-sm text-muted-foreground mb-1">Recent Sessions:</div>
                         <div className="space-y-1">
-                            {timeRecords[task.id].slice(-3).map((record, index) => (
+                            {timeRecords[task.id].slice(0, 3).map((record, index) => (
                                 <div key={index} className="flex justify-between text-xs">
                                     <span className="text-muted-foreground">
-                                        {new Date(record.startTime).toLocaleString()}
+                                        {formatRecordDate(record.startTime)} ({record.user})
                                     </span>
                                     <span className="font-mono">
                                         {formatTimeTracking(record.duration)}
@@ -865,6 +915,67 @@ const TaskAssignmentSection = ({ projectId, members }) => {
             </select>
         </div>
     );
+
+    const startTimerInterval = (taskId, startTime) => {
+        // Clear any existing interval first
+        if (activeTimers[taskId]?.interval) {
+            clearInterval(activeTimers[taskId].interval);
+        }
+
+        // Create new interval that updates every second
+        const intervalId = setInterval(() => {
+            const now = new Date();
+            const timerStartTime = new Date(startTime);
+            const elapsed = Math.floor((now - timerStartTime) / 1000);
+
+            setActiveTimers(current => {
+                const currentTimer = current[taskId] || {};
+                return {
+                    ...current,
+                    [taskId]: {
+                        ...currentTimer,
+                        startTime,
+                        elapsed,
+                        isRunning: true,
+                        interval: intervalId,
+                        user: currentUser?.email,
+                        lastUpdate: now.toISOString()
+                    }
+                };
+            });
+        }, 1000);
+
+        // Set initial timer state immediately
+        const now = new Date();
+        const timerStartTime = new Date(startTime);
+        const initialElapsed = Math.floor((now - timerStartTime) / 1000);
+
+        setActiveTimers(current => ({
+            ...current,
+            [taskId]: {
+                ...(current[taskId] || {}),
+                startTime,
+                elapsed: initialElapsed,
+                isRunning: true,
+                interval: intervalId,
+                user: currentUser?.email,
+                lastUpdate: now.toISOString()
+            }
+        }));
+
+        return intervalId;
+    };
+
+    // Clean up intervals when component unmounts
+    useEffect(() => {
+        return () => {
+            Object.values(activeTimers).forEach(timer => {
+                if (timer?.interval) {
+                    clearInterval(timer.interval);
+                }
+            });
+        };
+    }, [activeTimers]);
 
     // Update the task card to include better status indicators
     return (

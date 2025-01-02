@@ -280,15 +280,6 @@ const ProjectView = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-semibold text-secondary-foreground">Project Files</h2>
-              {canEdit && (
-                <button
-                  onClick={handleUploadClick}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-accent transition-colors font-medium flex items-center space-x-2"
-                >
-                  <FiUpload className="w-5 h-5" />
-                  <span>Upload Files</span>
-                </button>
-              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {project.files?.map((file) => (

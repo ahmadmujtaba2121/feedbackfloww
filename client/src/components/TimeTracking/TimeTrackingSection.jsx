@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FiClock, FiUser, FiCalendar, FiBarChart2, FiEdit2, FiX, FiChevronDown, FiChevronRight, FiCheckSquare } from 'react-icons/fi';
 import { useTask } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
+import TimeTracker from './TimeTracker';
 
 const TimeTrackingSection = ({ projectId }) => {
     const { tasks, updateTask } = useTask();
@@ -374,6 +375,8 @@ const TimeTrackingSection = ({ projectId }) => {
                     ))}
                 </div>
             </div>
+
+            <TimeTracker projectId={projectId} />
         </div>
     );
 };
