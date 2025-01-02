@@ -9,6 +9,8 @@ import VersionPanel from '../components/Canvas/VersionControl/VersionPanel';
 import ChatPanel from '../components/Chat/ChatPanel';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
+import CanvasChat from '../components/Canvas/CanvasChat';
+import { FiMessageSquare } from 'react-icons/fi';
 
 const CanvasPage = () => {
   const { projectId } = useParams();
@@ -24,6 +26,7 @@ const CanvasPage = () => {
     fill: false
   });
   const [userRole, setUserRole] = useState(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
     if (!projectId) return;
@@ -106,6 +109,17 @@ const CanvasPage = () => {
         />
       </div>
       <ChatPanel projectId={projectId} />
+      <button
+        onClick={() => setIsChatOpen(!isChatOpen)}
+        className="fixed right-4 bottom-4 p-3 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-colors"
+      >
+        <FiMessageSquare className="w-6 h-6" />
+      </button>
+      <CanvasChat
+        projectId={projectId}
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+      />
     </div>
   );
 };

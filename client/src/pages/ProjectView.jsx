@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiUpload, FiMaximize2, FiClock, FiUsers, FiFile, FiImage, FiTrash2, FiEye, FiList, FiCalendar, FiCheckSquare, FiZap, FiDollarSign } from 'react-icons/fi';
+import { FiUpload, FiMaximize2, FiClock, FiUsers, FiFile, FiImage, FiTrash2, FiEye, FiList, FiCalendar, FiCheckSquare, FiZap, FiDollarSign, FiMessageSquare } from 'react-icons/fi';
 import { auth, db } from '../firebase/firebase';
 import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
@@ -17,6 +17,7 @@ import Calendar from '../components/Calendar';
 import TeamSection from '../components/TeamSection';
 import TaskAssignmentSection from '../components/TaskManagement/TaskAssignmentSection';
 import InvoiceSection from '../components/TimeTracking/InvoiceSection';
+import ProjectChat from '../components/Chat/ProjectChat';
 
 const ProjectView = () => {
   const { projectId, inviteId } = useParams();
@@ -32,6 +33,7 @@ const ProjectView = () => {
   const isInviteView = Boolean(inviteId);
   const currentUser = auth.currentUser;
   const fileInputRef = useRef(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -560,6 +562,21 @@ const ProjectView = () => {
             </div>
           </div>
         </Modal>
+
+        {/* Chat Toggle Button */}
+        <button
+          onClick={() => setIsChatOpen(!isChatOpen)}
+          className="fixed right-4 bottom-4 p-3 bg-primary text-primary-foreground rounded-full shadow-lg hover:bg-primary/90 transition-colors"
+        >
+          <FiMessageSquare className="w-6 h-6" />
+        </button>
+
+        {/* Chat Panel */}
+        <ProjectChat
+          projectId={projectId}
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+        />
       </div>
     </TaskProvider>
   );
