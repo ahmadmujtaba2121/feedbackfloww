@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { doc, onSnapshot, updateDoc, arrayUnion, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../firebase/firebase';
-import { doc, onSnapshot, updateDoc, arrayUnion, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 import { TASK_STATUSES } from '../utils/taskStatus';
 
@@ -32,144 +32,113 @@ export const TaskProvider = ({ children, projectId }) => {
 
   // Helper function to normalize task data
   const normalizeTaskData = useCallback((data) => {
-    if (!data) {
-      console.warn('Received null or undefined data in normalizeTaskData');
-      return { tasks: [], reviews: [] };
-    }
+    if (!data) return { tasks: [], reviews: [] };
 
     const normalizeStatus = (status) => {
-      if (!status || typeof status !== 'string') {
-        return 'TODO';
-      }
-      // Convert to uppercase and replace spaces with underscores
+      if (!status || typeof status !== 'string') return 'TODO';
       const normalizedStatus = status.toUpperCase().replace(/ /g, '_');
-      // Ensure the status exists in TASK_STATUSES, otherwise default to TODO
       return normalizedStatus in TASK_STATUSES ? normalizedStatus : 'TODO';
     };
 
-    // Handle regular tasks
-    const projectTasks = Array.isArray(data.tasks) ? data.tasks.map(task => ({
-      ...task,
-      id: task.id || `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      status: normalizeStatus(task.status),
-      isTask: true,
-      type: 'task'
-    })) : [];
+    const projectTasks = Array.isArray(data.tasks) ? data.tasks
+      .filter(task => task && typeof task === 'object')
+      .map(task => ({
+        ...task,
+        id: task.id || `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        status: normalizeStatus(task.status),
+        isTask: true,
+        type: 'task'
+      })) : [];
 
-    // Handle reviews
-    const projectReviews = Array.isArray(data.reviews) ? data.reviews
-      .map(review => {
-        const normalizedReview = {
-          ...review,
-          id: review.id || `review-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          status: normalizeStatus(review.status),
-          isReview: true,
-          type: 'review'
-        };
-        return normalizedReview;
-      }) : [];
-
-    return { tasks: projectTasks, reviews: projectReviews };
+    return { tasks: projectTasks };
   }, []);
 
-  // Update task status
-  const updateTaskStatus = useCallback(async (taskId, newStatus) => {
-    if (!projectRef || !taskId) {
-      console.error('Missing projectRef or taskId in updateTaskStatus');
+  // Update task status function
+  const updateTaskStatus = async (taskId, newStatus) => {
+    if (!projectRef || !taskId || !newStatus) {
+      console.error('Missing required parameters in updateTaskStatus');
       return;
     }
 
     try {
-      // Get the latest project data first
+      // Get current project data
       const projectSnap = await getDoc(projectRef);
       if (!projectSnap.exists()) {
         throw new Error('Project not found');
       }
+
       const projectData = projectSnap.data();
+      const tasks = projectData.tasks || [];
 
-      // Find the task in both tasks and reviews arrays
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) {
-        throw new Error('Task not found');
+      // Find task index
+      const taskIndex = tasks.findIndex(t => t.id === taskId);
+      if (taskIndex === -1) {
+        throw new Error('Task not found in project');
       }
 
-      // Normalize the new status
-      const normalizedStatus = newStatus.toUpperCase().replace(/ /g, '_');
-      if (!(normalizedStatus in TASK_STATUSES)) {
-        throw new Error(`Invalid status: ${normalizedStatus}`);
-      }
-
-      const statusValue = normalizedStatus;
-      const timestamp = new Date().toISOString();
-
+      // Create updated task with new status and history
       const updatedTask = {
-        ...task,
-        status: statusValue,
-        lastModified: timestamp,
+        ...tasks[taskIndex],
+        status: newStatus,
+        lastModified: new Date().toISOString(),
         statusHistory: [
-          ...(task.statusHistory || []),
+          ...(tasks[taskIndex].statusHistory || []),
           {
-            status: statusValue,
-            timestamp: timestamp,
+            status: newStatus,
+            timestamp: new Date().toISOString(),
             updatedBy: auth?.currentUser?.email || 'unknown'
           }
         ]
       };
 
-      // Update in the correct array based on type
-      let tasksToUpdate = [...(projectData.tasks || [])];
-      let reviewsToUpdate = [...(projectData.reviews || [])];
-
-      if (task.type === 'task') {
-        tasksToUpdate = tasksToUpdate.map(t =>
-          t.id === taskId ? updatedTask : t
-        );
-      } else if (task.type === 'review') {
-        reviewsToUpdate = reviewsToUpdate.map(r =>
-          r.id === taskId ? updatedTask : r
-        );
-      }
+      // Update tasks array
+      const updatedTasks = [...tasks];
+      updatedTasks[taskIndex] = updatedTask;
 
       // Optimistic update
       setTasks(prevTasks =>
-        prevTasks.map(t =>
-          t.id === taskId ? updatedTask : t
+        prevTasks.map(task =>
+          task.id === taskId ? updatedTask : task
         )
       );
 
       // Update in Firestore
       await updateDoc(projectRef, {
-        tasks: tasksToUpdate,
-        reviews: reviewsToUpdate,
+        tasks: updatedTasks,
         lastModified: serverTimestamp()
       });
 
-      // Notify assignee if exists
-      if (task.assignedTo) {
-        const notificationRef = doc(db, 'notifications', task.assignedTo);
-        await setDoc(notificationRef, {
-          notifications: arrayUnion({
-            type: 'task_status_change',
-            taskId,
-            taskTitle: task.title,
-            newStatus: statusValue,
-            timestamp: timestamp,
-            read: false,
-            from: auth?.currentUser?.email || 'unknown'
-          })
-        }, { merge: true });
-      }
+      // Update project data in state
+      setProject(prev => ({
+        ...prev,
+        tasks: updatedTasks,
+        lastModified: serverTimestamp()
+      }));
 
-      toast.success(`${task.type === 'review' ? 'Review' : 'Task'} status updated to ${TASK_STATUSES[statusValue].label}`);
-      return true;
+      // Broadcast the status change
+      const event = new CustomEvent('taskStatusUpdate', {
+        detail: {
+          taskId,
+          newStatus,
+          task: updatedTask,
+          source: 'taskContext'
+        }
+      });
+      window.dispatchEvent(event);
+
     } catch (error) {
       console.error('Error updating task status:', error);
-      toast.error('Failed to update status');
+      // Revert optimistic update on error
+      setTasks(prevTasks =>
+        prevTasks.map(task =>
+          task.id === taskId ? { ...task, status: task.status } : task
+        )
+      );
       throw error;
     }
-  }, [projectRef, tasks]);
+  };
 
-  // Add updateTask function
+  // Update task function
   const updateTask = useCallback(async (taskId, updatedData) => {
     if (!projectRef || !taskId) {
       throw new Error('Missing projectRef or taskId in updateTask');
@@ -260,21 +229,6 @@ export const TaskProvider = ({ children, projectId }) => {
       // Optimistic update
       setTasks(prevTasks => [...prevTasks, { ...newTask, type: 'task', isTask: true }]);
 
-      // Notify assignee if exists
-      if (taskData.assignedTo) {
-        const notificationRef = doc(db, 'notifications', taskData.assignedTo);
-        await setDoc(notificationRef, {
-          notifications: arrayUnion({
-            type: 'task_assigned',
-            taskId: newTask.id,
-            taskTitle: newTask.title,
-            timestamp: timestamp,
-            read: false,
-            from: auth?.currentUser?.email || 'unknown'
-          })
-        }, { merge: true });
-      }
-
       return newTask;
     } catch (error) {
       console.error('Error adding task:', error);
@@ -290,7 +244,7 @@ export const TaskProvider = ({ children, projectId }) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
         const normalized = normalizeTaskData(data);
-        setTasks(normalized.tasks);
+        setTasks(normalized.tasks || []);
         setProject(data);
         setLastUpdate(data.lastModified);
         setLoading(false);
@@ -308,21 +262,20 @@ export const TaskProvider = ({ children, projectId }) => {
     return () => unsubscribe();
   }, [projectRef, normalizeTaskData]);
 
-  // Memoize the context value
   const value = useMemo(() => ({
     tasks,
     loading,
     error,
     project,
     lastUpdate,
-    updateTaskStatus,
     updateTask,
+    updateTaskStatus,
     addTask,
     getTasksByStatus: (status) => {
       const normalizedStatus = status.toUpperCase().replace(/ /g, '_');
-      return tasks.filter(task => task.status === normalizedStatus);
+      return tasks.filter(task => task?.status === normalizedStatus);
     }
-  }), [tasks, loading, error, project, lastUpdate, updateTaskStatus, updateTask, addTask]);
+  }), [tasks, loading, error, project, lastUpdate, updateTask, updateTaskStatus, addTask]);
 
   return (
     <TaskContext.Provider value={value}>

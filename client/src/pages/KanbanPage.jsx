@@ -11,7 +11,7 @@ const KanbanPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-background">
       <div className="pt-24 px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
         <TaskProvider projectId={projectId}>
           <KanbanBoard />

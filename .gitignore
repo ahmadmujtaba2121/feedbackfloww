@@ -30,3 +30,44 @@ yarn-error.log*
 
 # Firebase
 .firebase/ 
+
+# Build outputs
+dist/
+build/
+
+# Development
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor directories
+.idea/
+.vscode/
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.log
+*.tmp
+*~
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel/
+
+# Optional: Backup files
+*.bak
+*.backup
+_backup/ 

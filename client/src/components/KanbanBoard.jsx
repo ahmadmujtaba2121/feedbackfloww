@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import { FiPlus, FiX, FiClock, FiCheckCircle, FiAlertCircle, FiPlayCircle, FiEye, FiFileText, FiStar, FiBookmark, FiCheckSquare, FiSquare, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiX, FiClock, FiCheckCircle, FiAlertCircle, FiPlayCircle, FiEye, FiFileText, FiStar, FiBookmark, FiCheckSquare, FiSquare, FiTrash2, FiSearch, FiCircle, FiFilter, FiCalendar, FiGrid } from 'react-icons/fi';
 import TaskCard from './TaskCard';
 import { useTask } from '../contexts/TaskContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,33 +8,47 @@ import { useTheme } from '../contexts/ThemeContext';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TASK_STATUSES, getStatusConfig } from '../utils/taskStatus';
-import { serverTimestamp } from 'firebase/firestore';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { serverTimestamp, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
 import { useParams } from 'react-router-dom';
 import { formatTimestamp } from '../utils/dateUtils';
+import { cn } from '../utils/cn';
+
+// Add this after the imports
+const getPriorityColor = (priority) => {
+  switch (priority?.toLowerCase()) {
+    case 'high':
+      return 'bg-destructive/10 text-destructive';
+    case 'medium':
+      return 'bg-warning/10 text-warning';
+    case 'low':
+      return 'bg-primary/10 text-primary';
+    default:
+      return 'bg-muted text-muted-foreground';
+  }
+};
 
 const LoadingSkeleton = () => (
   <div className="flex space-x-4 min-w-max p-4">
-    {[...Array(5)].map((_, index) => (
-      <div key={index} className="w-80">
-        <div className="p-3 rounded-t-lg bg-slate-800/50 border-slate-600 animate-pulse">
+    {[...Array(4)].map((_, index) => (
+      <div key={index} className="w-[320px]">
+        <div className="p-3 rounded-t-lg bg-card/50 border-border animate-pulse">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <div className="w-4 h-4 bg-slate-600 rounded" />
-              <div className="h-4 w-20 bg-slate-600 rounded" />
+              <div className="w-4 h-4 bg-muted rounded" />
+              <div className="h-4 w-20 bg-muted rounded" />
             </div>
-            <div className="h-4 w-6 bg-slate-600 rounded" />
+            <div className="h-4 w-6 bg-muted rounded" />
           </div>
         </div>
-        <div className="min-h-[200px] p-2 rounded-b-lg border border-slate-600 bg-slate-800/50">
+        <div className="min-h-[200px] p-2 rounded-b-lg border border-border bg-card/30">
           {[...Array(3)].map((_, cardIndex) => (
             <div
               key={cardIndex}
-              className="mb-2 p-4 bg-slate-700/50 rounded-lg border border-slate-600"
+              className="mb-2 p-4 bg-card rounded-lg border border-border"
             >
-              <div className="h-4 w-3/4 bg-slate-600 rounded mb-2" />
-              <div className="h-3 w-1/2 bg-slate-600 rounded" />
+              <div className="h-4 w-3/4 bg-muted rounded mb-2" />
+              <div className="h-3 w-1/2 bg-muted rounded" />
             </div>
           ))}
         </div>
@@ -47,16 +61,26 @@ const BoardColumn = React.memo(({ status, config, tasks, project, currentUser })
   const { currentTheme } = useTheme();
 
   return (
-    <div key={status} className="w-80">
-      <div className={`p-3 rounded-t-lg bg-foreground border-border border-b-0`}>
+    <div className="w-80 shrink-0">
+      <div className="p-3 rounded-t-lg bg-card border border-border border-b-0">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <config.icon className={`w-4 h-4 text-primary`} />
-            <h3 className={`font-medium text-secondary-foreground`}>{config.label}</h3>
+          <div className="flex items-center gap-2">
+            <config.icon className="w-4 h-4 text-primary" />
+            <h3 className="font-medium text-foreground">{config.label}</h3>
           </div>
-          <span className={`text-sm text-muted-foreground`}>
-            {tasks?.length || 0}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {tasks?.length || 0}
+            </span>
+            {project?.owner === currentUser?.email && (
+              <button
+                onClick={() => setShowStatusModal(true)}
+                className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
+              >
+                <FiPlus className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
       <Droppable droppableId={status}>
@@ -64,7 +88,7 @@ const BoardColumn = React.memo(({ status, config, tasks, project, currentUser })
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`min-h-[200px] p-2 rounded-b-lg border border-border bg-foreground transition-colors ${snapshot.isDraggingOver ? 'bg-opacity-70' : ''
+            className={`min-h-[200px] p-2 rounded-b-lg border border-border bg-card/50 transition-colors ${snapshot.isDraggingOver ? 'bg-card shadow-sm' : ''
               }`}
           >
             {tasks?.map((task, index) => (
@@ -79,13 +103,140 @@ const BoardColumn = React.memo(({ status, config, tasks, project, currentUser })
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
-                    className={`mb-2 transition-transform ${snapshot.isDragging ? 'scale-105' : ''}`}
+                    className={`group relative mb-2 p-4 bg-card border border-border rounded-lg shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${snapshot.isDragging ? 'shadow-lg scale-105' : ''
+                      }`}
+                    style={{
+                      ...provided.draggableProps.style,
+                      userSelect: 'none',
+                    }}
                   >
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      isDragging={draggingTask?.id === task.id}
-                    />
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-medium text-foreground line-clamp-1">{task.title}</h4>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${getPriorityColor(task.priority)}`}>
+                          {task.priority}
+                        </span>
+                      </div>
+                      {task.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-2">{task.description}</p>
+                      )}
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          {task.deadline && (
+                            <div className="flex items-center gap-1">
+                              <FiClock className="w-3 h-3" />
+                              <span>{formatTimestamp(task.deadline)}</span>
+                            </div>
+                          )}
+                          {task.subtasks?.length > 0 && (
+                            <div className="flex items-center gap-1">
+                              <FiCheckSquare className="w-3 h-3" />
+                              <span>{task.subtasks.filter(st => st.completed).length}/{task.subtasks.length}</span>
+                            </div>
+                          )}
+                        </div>
+                        {task.assignedTo && (
+                          <div className="flex items-center gap-1">
+                            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+                              <span className="text-xs text-primary font-medium">
+                                {task.assignedTo.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {task.subtasks?.length > 0 && (
+                        <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary transition-all"
+                            style={{
+                              width: `${(task.subtasks.filter(st => st.completed).length / task.subtasks.length) * 100}%`
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Add this hover card component inside the task card */}
+                    <div className={`absolute invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-50 pointer-events-none ${draggingTask?.id === task.id ? 'opacity-0' : ''}`} style={{
+                      top: '-0.5rem',
+                      left: '50%',
+                      transform: 'translate(-50%, -100%)',
+                    }}>
+                      <div className="p-4 bg-popover border border-border rounded-lg shadow-lg">
+                        <div className="flex flex-col gap-3 min-w-[16rem]">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-foreground">{task.title}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${getPriorityColor(task.priority)}`}>
+                              {task.priority}
+                            </span>
+                          </div>
+                          {task.description && (
+                            <p className="text-sm text-muted-foreground">{task.description}</p>
+                          )}
+                          <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-1.5">
+                                <FiClock className="w-3.5 h-3.5" />
+                                <span>Created {formatTimestamp(task.createdAt)}</span>
+                              </div>
+                              {task.lastModified && (
+                                <div className="flex items-center gap-1.5">
+                                  <FiFileText className="w-3.5 h-3.5" />
+                                  <span>Updated {formatTimestamp(task.lastModified)}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              {task.deadline && (
+                                <div className="flex items-center gap-1.5">
+                                  <FiClock className="w-3.5 h-3.5" />
+                                  <span>Due {formatTimestamp(task.deadline)}</span>
+                                </div>
+                              )}
+                              {task.assignedTo && (
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-3.5 h-3.5 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <span className="text-[10px] text-primary font-medium">
+                                      {task.assignedTo.charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <span>{task.assignedTo}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {task.subtasks?.length > 0 && (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">Progress</span>
+                                <span className="text-foreground font-medium">
+                                  {Math.round((task.subtasks.filter(st => st.completed).length / task.subtasks.length) * 100)}%
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-primary transition-all"
+                                  style={{
+                                    width: `${(task.subtasks.filter(st => st.completed).length / task.subtasks.length) * 100}%`
+                                  }}
+                                />
+                              </div>
+                              <div className="text-xs space-y-1">
+                                {task.subtasks.map(subtask => (
+                                  <div key={subtask.id} className="flex items-center gap-2">
+                                    <div className={`w-1.5 h-1.5 rounded-full ${subtask.completed ? 'bg-primary' : 'bg-muted'}`} />
+                                    <span className={subtask.completed ? 'text-muted-foreground line-through' : 'text-foreground'}>
+                                      {subtask.title}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </Draggable>
@@ -107,7 +258,27 @@ const KanbanBoard = () => {
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPriority, setFilterPriority] = useState('all');
+  const [filterDue, setFilterDue] = useState('all');
+  const [filterProgress, setFilterProgress] = useState('all');
   const [filterAssignee, setFilterAssignee] = useState('all');
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [view, setView] = useState('board');
+  const [groupBy, setGroupBy] = useState('status');
+  const [customStatuses, setCustomStatuses] = useState([]);
+  const [newStatusName, setNewStatusName] = useState('');
+  const [newStatusColor, setNewStatusColor] = useState('#6366f1');
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showQuickNotes, setShowQuickNotes] = useState(false);
+  const [quickNote, setQuickNote] = useState('');
+  const [showTodoPanel, setShowTodoPanel] = useState(false);
+  const [pinnedTasks, setPinnedTasks] = useState([]);
+  const [draggingTask, setDraggingTask] = useState(null);
+  const [dragOverStatus, setDragOverStatus] = useState(null);
+  const [showSubtaskModal, setShowSubtaskModal] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [newSubtask, setNewSubtask] = useState('');
+  const searchInputRef = useRef(null);
+
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -120,25 +291,21 @@ const KanbanBoard = () => {
   // Filter and search tasks with member suggestions
   const [memberSuggestions, setMemberSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const searchInputRef = useRef(null);
 
   // Add drag start state
   const [draggedTask, setDraggedTask] = useState(null);
   const [dragStartTime, setDragStartTime] = useState(null);
   const [isDraggingStatus, setIsDraggingStatus] = useState(false);
 
-  const [draggingTask, setDraggingTask] = useState(null);
-  const [dragOverStatus, setDragOverStatus] = useState(null);
+  const [activeFilters, setActiveFilters] = useState({
+    priority: false,
+    dueDate: false,
+    assignee: false,
+    progress: false
+  });
 
-  const [showQuickNotes, setShowQuickNotes] = useState(false);
-  const [quickNote, setQuickNote] = useState('');
-  const [showTodoPanel, setShowTodoPanel] = useState(false);
-  const [pinnedTasks, setPinnedTasks] = useState([]);
-  const quickNotesRef = useRef(null);
-
-  const [showSubtaskModal, setShowSubtaskModal] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [newSubtask, setNewSubtask] = useState('');
+  const [activeView, setActiveView] = useState('board');
+  const [activeGrouping, setActiveGrouping] = useState('status');
 
   // Add useEffect to log project data for debugging
   useEffect(() => {
@@ -221,7 +388,8 @@ const KanbanBoard = () => {
 
     try {
       await updateTaskStatus(taskId, newStatus);
-      toast.success(`Task moved to ${TASK_STATUSES[newStatus].label}`, {
+      const statusLabel = TASK_STATUSES[newStatus]?.label || newStatus;
+      toast.success(`Task moved to ${statusLabel}`, {
         id: `move-${taskId}-${newStatus}`,
       });
     } catch (error) {
@@ -236,13 +404,17 @@ const KanbanBoard = () => {
   useEffect(() => {
     const handleTaskUpdate = (event) => {
       const { taskId, newStatus, updatedTask } = event.detail;
+      if (!taskId || !newStatus) return;
+
       // Update local state if needed
-      if (tasks.some(t => t.id === taskId)) {
-        // Force a re-render of the affected task
-        const taskIndex = tasks.findIndex(t => t.id === taskId);
-        if (taskIndex !== -1) {
-          tasks[taskIndex] = updatedTask;
-        }
+      const taskToUpdate = tasks.find(t => t?.id === taskId);
+      if (taskToUpdate) {
+        const updatedTasks = tasks.map(t =>
+          t?.id === taskId ? { ...t, status: newStatus, ...updatedTask } : t
+        );
+        // Use the tasks from context
+        const { setTasks } = useTask();
+        setTasks(updatedTasks);
       }
     };
 
@@ -253,33 +425,74 @@ const KanbanBoard = () => {
   }, [tasks]);
 
   // Filtered tasks based on search and filters
-  const filteredTasks = useMemo(() => {
+  const getFilteredTasks = useCallback(() => {
     return tasks.filter(task => {
-      if (!task) return false;
+      // Priority filter
+      if (filterPriority !== 'all' && task.priority?.toLowerCase() !== filterPriority?.toLowerCase()) {
+        return false;
+      }
 
-      const matchesSearch = !searchQuery ||
-        task.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.assignedTo?.toLowerCase().includes(searchQuery.toLowerCase());
+      // Due date filter
+      if (filterDue !== 'all') {
+        const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const nextWeek = new Date(today);
+        nextWeek.setDate(nextWeek.getDate() + 7);
 
-      const matchesPriority = filterPriority === 'all' || task.priority === filterPriority;
-      const matchesAssignee = filterAssignee === 'all' || task.assignedTo === filterAssignee;
+        switch (filterDue) {
+          case 'overdue':
+            if (!dueDate || dueDate >= today) return false;
+            break;
+          case 'today':
+            if (!dueDate || dueDate.getDate() !== today.getDate()) return false;
+            break;
+          case 'tomorrow':
+            if (!dueDate || dueDate.getDate() !== tomorrow.getDate()) return false;
+            break;
+          case 'thisWeek':
+            if (!dueDate || dueDate > nextWeek || dueDate < today) return false;
+            break;
+          case 'none':
+            if (dueDate) return false;
+            break;
+        }
+      }
 
-      return matchesSearch && matchesPriority && matchesAssignee;
+      // Progress filter
+      if (filterProgress !== 'all') {
+        switch (filterProgress) {
+          case 'notStarted':
+            if (task.status !== 'TODO') return false;
+            break;
+          case 'inProgress':
+            if (!['IN_PROGRESS', 'IN_REVIEW'].includes(task.status)) return false;
+            break;
+          case 'completed':
+            if (task.status !== 'COMPLETED') return false;
+            break;
+        }
+      }
+
+      // Assignee filter
+      if (filterAssignee !== 'all' && task.assignedTo !== filterAssignee) {
+        return false;
+      }
+
+      return true;
     });
-  }, [tasks, searchQuery, filterPriority, filterAssignee]);
+  }, [tasks, filterPriority, filterDue, filterProgress, filterAssignee]);
 
   const getTasksByStatus = useCallback((status) => {
-    return filteredTasks.filter(task => {
-      if (!task || !task.status) return false;
-      const taskStatus = task.status.toUpperCase();
-      return taskStatus === status.toUpperCase();
-    });
-  }, [filteredTasks]);
+    return getFilteredTasks().filter(task => task.status === status);
+  }, [getFilteredTasks]);
 
   const taskGroups = useMemo(() => {
+    if (!TASK_STATUSES) return {};
     return Object.keys(TASK_STATUSES).reduce((acc, status) => {
-      acc[status] = getTasksByStatus(status);
+      acc[status] = getTasksByStatus(status)?.filter(task => task?.id) || [];
       return acc;
     }, {});
   }, [getTasksByStatus]);
@@ -312,24 +525,26 @@ const KanbanBoard = () => {
 
   // Add deadline notification check
   const checkDeadlines = useCallback(() => {
+    if (!Array.isArray(tasks)) return;
     const notifiedTasks = new Set();
     tasks.forEach(task => {
-      if (task.deadline && !notifiedTasks.has(task.id)) {
-        const deadline = new Date(task.deadline);
-        const now = new Date();
-        const hoursUntilDeadline = (deadline - now) / (1000 * 60 * 60);
+      if (!task?.id || !task?.deadline) return;
+      if (notifiedTasks.has(task.id)) return;
 
-        if (hoursUntilDeadline <= task.notifyBefore && hoursUntilDeadline > 0) {
-          toast.warning(`Task "${task.title}" is due in ${Math.round(hoursUntilDeadline)} hours!`, {
-            id: `deadline-${task.id}`,
-          });
-          notifiedTasks.add(task.id);
-        } else if (hoursUntilDeadline <= 0) {
-          toast.error(`Task "${task.title}" is overdue!`, {
-            id: `overdue-${task.id}`,
-          });
-          notifiedTasks.add(task.id);
-        }
+      const deadline = new Date(task.deadline);
+      const now = new Date();
+      const hoursUntilDeadline = (deadline - now) / (1000 * 60 * 60);
+
+      if (hoursUntilDeadline <= (task.notifyBefore || 24) && hoursUntilDeadline > 0) {
+        toast.warning(`Task "${task.title || 'Untitled'}" is due in ${Math.round(hoursUntilDeadline)} hours!`, {
+          id: `deadline-${task.id}`,
+        });
+        notifiedTasks.add(task.id);
+      } else if (hoursUntilDeadline <= 0) {
+        toast.error(`Task "${task.title || 'Untitled'}" is overdue!`, {
+          id: `overdue-${task.id}`,
+        });
+        notifiedTasks.add(task.id);
       }
     });
   }, [tasks]);
@@ -511,17 +726,31 @@ const KanbanBoard = () => {
     <div className="flex items-center space-x-2 ml-4">
       <button
         onClick={() => setShowQuickNotes(!showQuickNotes)}
-        className="flex items-center px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600"
+        className="flex items-center px-3 py-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
       >
         <FiFileText className="mr-2" />
         Quick Notes
       </button>
       <button
         onClick={() => setShowTodoPanel(!showTodoPanel)}
-        className="flex items-center px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600"
+        className="flex items-center px-3 py-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
       >
         <FiBookmark className="mr-2" />
         Quick TODOs
+      </button>
+      <button
+        onClick={() => setShowStatusModal(true)}
+        className="flex items-center px-3 py-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
+      >
+        <FiPlus className="w-4 h-4 mr-1" />
+        Add Status
+      </button>
+      <button
+        onClick={() => setIsAddingTask(true)}
+        className="px-3 py-1.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg flex items-center gap-2 transition-colors"
+      >
+        <FiPlus className="w-4 h-4" />
+        <span>New Task</span>
       </button>
     </div>
   );
@@ -533,8 +762,8 @@ const KanbanBoard = () => {
         <button
           onClick={() => togglePinTask(task)}
           className={`${pinnedTasks.some(t => t.id === task.id)
-            ? 'text-yellow-500 hover:text-yellow-400'
-            : 'text-slate-400 hover:text-yellow-500'
+            ? 'text-warning'
+            : 'text-muted-foreground hover:text-warning'
             }`}
         >
           <FiStar className="w-4 h-4" />
@@ -548,280 +777,135 @@ const KanbanBoard = () => {
     </div>
   );
 
-  // Add Subtask Modal Component
-  const SubtaskModal = () => {
-    if (!selectedTask) return null;
+  const handleFilterToggle = () => {
+    const hasActiveFilters = filterPriority !== 'all' || filterDue !== 'all' ||
+      filterAssignee !== 'all' || filterProgress !== 'all';
+    setShowFilterPanel(prev => !prev);
+    if (hasActiveFilters) {
+      toast.success('Filters active');
+    }
+  };
 
-    const handleSubtaskInputChange = (e) => {
-      setNewSubtask(e.target.value);
-    };
+  const handleViewToggle = () => {
+    const newView = activeView === 'board' ? 'timeline' : 'board';
+    setActiveView(newView);
+    toast.success(`Switched to ${newView} view`);
+  };
 
-    const handleAddSubtask = async () => {
-      if (!newSubtask.trim()) return;
+  const handleGroupingToggle = () => {
+    const newGrouping = activeGrouping === 'status' ? 'assignee' : 'status';
+    setActiveGrouping(newGrouping);
+    toast.success(`Grouped by ${newGrouping}`);
+  };
 
-      try {
-        if (!projectId) {
-          console.error('Missing projectId');
-          toast.error('Project ID not found');
-          return;
-        }
+  const onDragStart = (result) => {
+    const { draggableId } = result;
+    const task = tasks.find(t => t.id === draggableId);
+    setDraggingTask(task);
+  };
 
-        console.log('Adding subtask to project:', projectId);
-        console.log('Selected task:', selectedTask);
+  const onDragEnd = async (result) => {
+    const { destination, source, draggableId } = result;
+    setDraggingTask(null);
 
-        // Get project reference
-        const projectRef = doc(db, 'projects', projectId);
+    // If dropped outside a droppable area or in the same position
+    if (!destination ||
+      (destination.droppableId === source.droppableId &&
+        destination.index === source.index)
+    ) {
+      return;
+    }
 
-        // Get the latest project data
-        const projectSnap = await getDoc(projectRef);
+    try {
+      const newStatus = destination.droppableId;
+      await updateTaskStatus(draggableId, newStatus);
 
-        if (!projectSnap.exists()) {
-          console.error('Project document not found:', projectId);
-          toast.error('Project not found');
-          return;
-        }
+      // Success notification
+      const statusLabel = TASK_STATUSES[newStatus]?.label || newStatus;
+      toast.success(`Task moved to ${statusLabel}`);
+    } catch (error) {
+      console.error('Error moving task:', error);
+      toast.error('Failed to move task');
+    }
+  };
 
-        const projectData = projectSnap.data();
-        console.log('Project data:', projectData);
+  // Update event listener for task updates
+  useEffect(() => {
+    const handleTaskUpdate = (event) => {
+      const { taskId, newStatus, task } = event.detail;
+      if (!taskId || !newStatus) return;
 
-        // Ensure tasks array exists
-        const tasks = Array.isArray(projectData.tasks) ? projectData.tasks : [];
-        console.log('Current tasks:', tasks);
-
-        // Find the task to update
-        const taskIndex = tasks.findIndex(t => t.id === selectedTask.id);
-        console.log('Task index:', taskIndex, 'Selected task ID:', selectedTask.id);
-
-        if (taskIndex === -1) {
-          console.error('Task not found in project tasks');
-          toast.error('Task not found');
-          return;
-        }
-
-        // Create a deep copy of the tasks array
-        const updatedTasks = JSON.parse(JSON.stringify(tasks));
-        const taskToUpdate = updatedTasks[taskIndex];
-
-        // Initialize subtasks array if it doesn't exist
-        if (!Array.isArray(taskToUpdate.subtasks)) {
-          taskToUpdate.subtasks = [];
-        }
-
-        // Create new subtask object
-        const newSubtaskObj = {
-          id: `subtask-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          title: newSubtask.trim(),
-          completed: false,
-          createdAt: serverTimestamp(),
-          createdBy: currentUser?.email || 'unknown'
-        };
-
-        // Add the new subtask
-        taskToUpdate.subtasks.push(newSubtaskObj);
-        taskToUpdate.lastModified = serverTimestamp();
-
-        console.log('Updated task with new subtask:', taskToUpdate);
-
-        try {
-          // Update the project document
-          await updateDoc(projectRef, {
-            tasks: updatedTasks,
-            lastModified: serverTimestamp()
-          });
-
-          // Update local state
-          setSelectedTask({
-            ...taskToUpdate,
-            projectId
-          });
-          setNewSubtask('');
-          toast.success('Subtask added successfully');
-        } catch (updateError) {
-          console.error('Error updating document:', updateError);
-          toast.error('Failed to update project document');
-        }
-      } catch (error) {
-        console.error('Error in handleAddSubtask:', error);
-        toast.error(error.message || 'Failed to add subtask');
+      // Only update if the event wasn't triggered by this component
+      if (event.detail.source !== 'kanban') {
+        // The tasks state will be automatically updated by TaskContext
+        // No need to manually setTasks here
+        return;
       }
     };
 
-    const handleToggleSubtask = async (subtaskId) => {
-      try {
-        const projectRef = doc(db, 'projects', selectedTask.projectId);
-        const projectSnap = await getDoc(projectRef);
-
-        if (!projectSnap.exists()) {
-          console.error('Project not found:', selectedTask.projectId);
-          toast.error('Project not found');
-          return;
-        }
-
-        const projectData = projectSnap.data();
-        const taskIndex = projectData.tasks.findIndex(t => t.id === selectedTask.id);
-
-        if (taskIndex === -1) {
-          console.error('Task not found in project:', selectedTask.id);
-          toast.error('Task not found');
-          return;
-        }
-
-        const updatedTasks = [...projectData.tasks];
-        const taskToUpdate = { ...updatedTasks[taskIndex] };
-
-        taskToUpdate.subtasks = taskToUpdate.subtasks.map(st =>
-          st.id === subtaskId ? { ...st, completed: !st.completed } : st
-        );
-        taskToUpdate.lastModified = serverTimestamp();
-        updatedTasks[taskIndex] = taskToUpdate;
-
-        await updateDoc(projectRef, {
-          tasks: updatedTasks,
-          lastModified: serverTimestamp()
-        });
-
-        setSelectedTask(taskToUpdate);
-      } catch (error) {
-        console.error('Error toggling subtask:', error);
-        toast.error('Failed to toggle subtask');
-      }
+    window.addEventListener('taskStatusUpdate', handleTaskUpdate);
+    return () => {
+      window.removeEventListener('taskStatusUpdate', handleTaskUpdate);
     };
+  }, []); // Remove setTasks dependency
 
-    const handleDeleteSubtask = async (subtaskId) => {
-      try {
-        const projectRef = doc(db, 'projects', selectedTask.projectId);
-        const projectSnap = await getDoc(projectRef);
+  const handleAddCustomStatus = async () => {
+    if (!newStatusName.trim()) {
+      toast.error('Status name is required');
+      return;
+    }
 
-        if (!projectSnap.exists()) {
-          console.error('Project not found:', selectedTask.projectId);
-          toast.error('Project not found');
-          return;
-        }
+    try {
+      const statusId = `CUSTOM_${newStatusName.toUpperCase().replace(/\s+/g, '_')}`;
+      const newStatus = {
+        id: statusId,
+        label: newStatusName,
+        color: newStatusColor,
+        icon: FiCircle,
+        custom: true
+      };
 
-        const projectData = projectSnap.data();
-        const taskIndex = projectData.tasks.findIndex(t => t.id === selectedTask.id);
+      setCustomStatuses(prev => [...prev, newStatus]);
+      setNewStatusName('');
+      setNewStatusColor('#6366f1');
+      setShowStatusModal(false);
+      toast.success('Custom status added successfully');
+    } catch (error) {
+      console.error('Error adding custom status:', error);
+      toast.error('Failed to add custom status');
+    }
+  };
 
-        if (taskIndex === -1) {
-          console.error('Task not found in project:', selectedTask.id);
-          toast.error('Task not found');
-          return;
-        }
+  // Add this function near other state management functions
+  const handleDeleteStatus = (statusId) => {
+    if (!statusId || Object.keys(TASK_STATUSES).includes(statusId)) {
+      toast.error('Cannot delete default status');
+      return;
+    }
 
-        const updatedTasks = [...projectData.tasks];
-        const taskToUpdate = { ...updatedTasks[taskIndex] };
+    const tasksInStatus = tasks.filter(task => task.status === statusId);
+    if (tasksInStatus.length > 0) {
+      toast.error('Cannot delete status with tasks. Please move tasks first.');
+      return;
+    }
 
-        taskToUpdate.subtasks = taskToUpdate.subtasks.filter(st => st.id !== subtaskId);
-        taskToUpdate.lastModified = serverTimestamp();
-        updatedTasks[taskIndex] = taskToUpdate;
-
-        await updateDoc(projectRef, {
-          tasks: updatedTasks,
-          lastModified: serverTimestamp()
-        });
-
-        setSelectedTask(taskToUpdate);
-        toast.success('Subtask deleted');
-      } catch (error) {
-        console.error('Error deleting subtask:', error);
-        toast.error('Failed to delete subtask');
-      }
-    };
-
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-slate-800 rounded-lg p-6 w-full max-w-lg">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-white">
-              Manage Subtasks: {selectedTask.title}
-            </h3>
-            <button
-              onClick={() => {
-                setShowSubtaskModal(false);
-                setSelectedTask(null);
-                setNewSubtask('');
-              }}
-              className="text-slate-400 hover:text-white"
-            >
-              <FiX className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="mb-4">
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                value={newSubtask}
-                onChange={handleSubtaskInputChange}
-                placeholder="New subtask..."
-                className="flex-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-violet-500"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddSubtask();
-                  }
-                }}
-                autoFocus
-              />
-              <button
-                onClick={handleAddSubtask}
-                className="px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600"
-              >
-                Add Subtask
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {selectedTask.subtasks?.map(subtask => (
-              <div
-                key={subtask.id}
-                className="flex items-center justify-between bg-slate-700/50 p-2 rounded-lg group"
-              >
-                <div className="flex items-center">
-                  <button
-                    onClick={() => handleToggleSubtask(subtask.id)}
-                    className={`p-1 rounded hover:bg-slate-600 ${subtask.completed ? 'text-violet-400' : 'text-slate-400'}`}
-                  >
-                    {subtask.completed ? (
-                      <FiCheckSquare className="w-4 h-4" />
-                    ) : (
-                      <FiSquare className="w-4 h-4" />
-                    )}
-                  </button>
-                  <span className={`ml-2 ${subtask.completed ? 'text-slate-400 line-through' : 'text-white'}`}>
-                    {subtask.title}
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleDeleteSubtask(subtask.id)}
-                  className="text-slate-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <FiTrash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-            {(!selectedTask.subtasks || selectedTask.subtasks.length === 0) && (
-              <p className="text-slate-400 text-center py-4">No subtasks yet</p>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+    setCustomStatuses(prev => prev.filter(status => status.id !== statusId));
+    toast.success('Status deleted successfully');
   };
 
   if (error) {
     return (
-      <div className="h-full flex flex-col items-center justify-center bg-slate-900 p-4">
-        <div className="text-red-500 text-xl mb-4">
+      <div className="h-full flex flex-col items-center justify-center bg-background p-4">
+        <div className="text-destructive text-xl mb-4">
           <FiAlertCircle className="w-12 h-12 mx-auto mb-4" />
           Failed to load tasks
         </div>
-        <div className="text-slate-400 text-center mb-4">
+        <div className="text-muted-foreground text-center mb-4">
           {error}
         </div>
         <button
           onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors"
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
         >
           Retry
         </button>
@@ -830,273 +914,758 @@ const KanbanBoard = () => {
   }
 
   if (loading) {
-    return <LoadingSkeleton />;
+    return (
+      <div className="h-full bg-background">
+        <LoadingSkeleton />
+      </div>
+    );
   }
 
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="h-full flex flex-col bg-slate-900">
-        <div className="p-4 bg-slate-800/50 border-b border-slate-700">
+    <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
+      <div className="min-h-screen bg-background">
+        {/* Header Section */}
+        <div className="p-4 bg-background/50 border-b border-border sticky top-0 z-20 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center">
-              <h2 className="text-xl font-semibold text-white">Task Board</h2>
+            <div className="flex items-center space-x-4">
+              <h2 className="text-xl font-semibold text-card-foreground">Task Board</h2>
               {renderQuickAccessButtons()}
             </div>
-            {project?.owner === currentUser?.email && (
-              <button
-                onClick={() => setIsAddingTask(true)}
-                className="flex items-center px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors"
-              >
-                <FiPlus className="mr-2" />
-                Add Task
-              </button>
-            )}
           </div>
 
           {/* Search and Filter Bar */}
-          <div className="flex flex-wrap gap-4 mb-4">
-            <div className="flex-1 min-w-[200px] relative">
+          <div className="flex flex-wrap gap-4 items-center">
+            <div className="relative flex-1 min-w-[200px]">
               <input
                 ref={searchInputRef}
                 type="text"
-                placeholder="Search tasks... Use @ to mention someone"
                 value={searchQuery}
                 onChange={handleSearchInput}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-violet-500"
+                placeholder="Search tasks..."
+                className="w-full px-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
-              {/* Member suggestions dropdown */}
-              {showSuggestions && memberSuggestions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                  {memberSuggestions.map(member => (
-                    <button
-                      key={member}
-                      onClick={() => handleMemberSelect(member)}
-                      className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 focus:outline-none focus:bg-slate-700"
-                    >
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center mr-2">
-                          {member.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="font-medium">{member.split('@')[0]}</div>
-                          <div className="text-xs text-slate-400">{member}</div>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <FiSearch className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             </div>
-            <div className="w-40">
+
+            <div className="flex items-center space-x-2">
               <select
                 value={filterPriority}
                 onChange={(e) => setFilterPriority(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-violet-500"
+                className="px-3 py-1.5 bg-background/50 border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               >
                 <option value="all">All Priorities</option>
-                <option value="low">Low Priority</option>
-                <option value="medium">Medium Priority</option>
                 <option value="high">High Priority</option>
+                <option value="medium">Medium Priority</option>
+                <option value="low">Low Priority</option>
               </select>
-            </div>
-            <div className="w-40">
+
               <select
                 value={filterAssignee}
                 onChange={(e) => setFilterAssignee(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-violet-500"
+                className="px-3 py-1.5 bg-background/50 border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               >
                 <option value="all">All Assignees</option>
-                {Array.isArray(project?.members) && project.members.map(member => {
-                  if (typeof member !== 'string') return null;
-                  const displayName = member.includes('@') ? member.split('@')[0] : member;
-                  return (
-                    <option key={member} value={member}>
+                {project?.members?.map((member) => {
+                  // Handle both string and object member formats
+                  const memberEmail = typeof member === 'object' ? member.email : member;
+                  const displayName = typeof member === 'object' ?
+                    (member.displayName || member.email?.split('@')[0] || memberEmail) :
+                    member?.split('@')[0] || member;
+
+                  return memberEmail ? (
+                    <option key={memberEmail} value={memberEmail}>
                       {displayName}
                     </option>
-                  );
+                  ) : null;
                 })}
               </select>
-            </div>
-          </div>
 
-          {/* Task Creation Form */}
-          {isAddingTask && (
-            <div className="mt-4 bg-slate-700/50 rounded-lg p-4">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-white">Create New Task</h3>
+              <select
+                value={filterDue}
+                onChange={(e) => setFilterDue(e.target.value)}
+                className="px-3 py-1.5 bg-background/50 border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              >
+                <option value="all">All Due Dates</option>
+                <option value="overdue">Overdue</option>
+                <option value="today">Due Today</option>
+                <option value="tomorrow">Due Tomorrow</option>
+                <option value="thisWeek">Due This Week</option>
+                <option value="none">No Due Date</option>
+              </select>
+
+              <select
+                value={filterProgress}
+                onChange={(e) => setFilterProgress(e.target.value)}
+                className="px-3 py-1.5 bg-background/50 border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              >
+                <option value="all">All Progress</option>
+                <option value="notStarted">Not Started</option>
+                <option value="inProgress">In Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+
+            <div className="relative">
+              <div className="flex items-center space-x-2 ml-auto">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowFilterPanel(prev => !prev)}
+                    className={`p-1.5 rounded-lg hover:bg-muted transition-colors ${filterPriority !== 'all' || filterDue !== 'all' ||
+                      filterAssignee !== 'all' || filterProgress !== 'all'
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    title="Toggle Filters"
+                  >
+                    <FiFilter className="w-4 h-4" />
+                  </button>
+                </div>
                 <button
-                  onClick={() => setIsAddingTask(false)}
-                  className="text-slate-400 hover:text-white"
+                  onClick={() => {
+                    setView(prev => prev === 'board' ? 'timeline' : 'board');
+                    toast.success(`Switched to ${view === 'board' ? 'Timeline' : 'Board'} view`);
+                  }}
+                  className={`p-1.5 rounded-lg hover:bg-muted transition-colors ${view === 'timeline'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-primary'
+                    }`}
+                  title={`Switch to ${view === 'board' ? 'Timeline' : 'Board'} View`}
                 >
-                  <FiX className="w-5 h-5" />
+                  <FiCalendar className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    setGroupBy(prev => prev === 'status' ? 'assignee' : 'status');
+                    toast.success(`Grouped by ${groupBy === 'status' ? 'Assignee' : 'Status'}`);
+                  }}
+                  className={`p-1.5 rounded-lg hover:bg-muted transition-colors ${groupBy === 'assignee'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-primary'
+                    }`}
+                  title={`Group by ${groupBy === 'status' ? 'Assignee' : 'Status'}`}
+                >
+                  <FiGrid className="w-4 h-4" />
                 </button>
               </div>
-              <form onSubmit={handleCreateTask} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Title
-                  </label>
-                  <input
-                    type="text"
-                    value={newTask.title}
-                    onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                    placeholder="Task title"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={newTask.description}
-                    onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                    rows="3"
-                    placeholder="Task description"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
-                      Status
-                    </label>
-                    <select
-                      value={newTask.status}
-                      onChange={(e) => setNewTask({ ...newTask, status: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                    >
-                      {Object.entries(TASK_STATUSES).map(([value, { label }]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
-                      Priority
-                    </label>
-                    <select
-                      value={newTask.priority}
-                      onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
-                      Deadline
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={newTask.deadline}
-                      onChange={(e) => setNewTask({ ...newTask, deadline: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
-                      Notify Before (hours)
-                    </label>
-                    <input
-                      type="number"
-                      value={newTask.notifyBefore}
-                      onChange={(e) => setNewTask({ ...newTask, notifyBefore: parseInt(e.target.value) })}
-                      min="1"
-                      max="72"
-                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingTask(false)}
-                    className="px-4 py-2 text-slate-300 hover:text-white"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600"
-                  >
-                    Create Task
-                  </button>
-                </div>
-              </form>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Quick Notes and TODO Panels */}
         {showQuickNotes && <QuickNotesPanel />}
         {showTodoPanel && <TodoPanel />}
 
-        {/* Kanban Board */}
-        <div className="flex-1 p-4 overflow-x-auto">
-          <div className="flex space-x-4 min-w-max">
-            {Object.entries(TASK_STATUSES).map(([status, config]) => (
-              <div key={status} className="w-80">
-                <div className={`p-3 rounded-t-lg ${config.bgColor} ${config.borderColor} border-b-0`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <config.icon className={`w-4 h-4 ${config.color}`} />
-                      <h3 className={`font-medium ${config.color}`}>{config.label}</h3>
-                    </div>
-                    <span className={`text-sm ${config.color}`}>
-                      {getTasksByStatus(status).length}
-                    </span>
-                  </div>
+        {/* Filter Panel */}
+        {showFilterPanel && (
+          <div className="absolute right-0 mt-2 w-72 bg-background border border-border shadow-xl rounded-lg z-50">
+            <div className="p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-primary">Filter Tasks</h3>
+                <button onClick={() => setShowFilterPanel(false)} className="text-muted-foreground hover:text-foreground">
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-primary">Priority</label>
+                  <select
+                    value={filterPriority}
+                    onChange={(e) => setFilterPriority(e.target.value)}
+                    className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary hover:border-primary transition-colors"
+                  >
+                    <option value="all">All Priorities</option>
+                    <option value="high">High Priority</option>
+                    <option value="medium">Medium Priority</option>
+                    <option value="low">Low Priority</option>
+                  </select>
                 </div>
-                <div
-                  onDragOver={(e) => handleDragOver(e, status)}
-                  onDrop={(e) => handleDrop(e, status)}
-                  className={`min-h-[200px] p-2 rounded-b-lg border ${config.borderColor} ${config.bgColor
-                    } transition-colors ${dragOverStatus === status
-                      ? 'border-violet-500 ring-2 ring-violet-500/50 bg-opacity-70'
-                      : ''
-                    }`}
-                >
-                  {getTasksByStatus(status).map((task) => (
-                    <motion.div
-                      key={task.id}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, task)}
-                      onDragEnd={handleDragEnd}
-                      className={`mb-2 cursor-move select-none ${draggingTask?.id === task.id ? 'opacity-50' : ''
-                        }`}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      {renderTaskWithPin(task)}
-                    </motion.div>
-                  ))}
-                  {dragOverStatus === status && (
-                    <div className="h-2 bg-violet-500/20 rounded-lg mt-2 transition-all duration-200" />
-                  )}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-primary">Due Date</label>
+                  <select
+                    value={filterDue}
+                    onChange={(e) => setFilterDue(e.target.value)}
+                    className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary hover:border-primary transition-colors"
+                  >
+                    <option value="all">All Due Dates</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="today">Due Today</option>
+                    <option value="tomorrow">Due Tomorrow</option>
+                    <option value="thisWeek">Due This Week</option>
+                    <option value="none">No Due Date</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-primary">Progress</label>
+                  <select
+                    value={filterProgress}
+                    onChange={(e) => setFilterProgress(e.target.value)}
+                    className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary hover:border-primary transition-colors"
+                  >
+                    <option value="all">All Progress</option>
+                    <option value="notStarted">Not Started</option>
+                    <option value="inProgress">In Progress</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-primary">Assignee</label>
+                  <select
+                    value={filterAssignee}
+                    onChange={(e) => setFilterAssignee(e.target.value)}
+                    className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary hover:border-primary transition-colors"
+                  >
+                    <option value="all">All Assignees</option>
+                    {project?.members?.map((member) => {
+                      const memberEmail = typeof member === 'object' ? member.email : member;
+                      const displayName = typeof member === 'object' ?
+                        (member.displayName || member.email?.split('@')[0] || memberEmail) :
+                        member?.split('@')[0] || member;
+
+                      return memberEmail ? (
+                        <option key={memberEmail} value={memberEmail}>
+                          {displayName}
+                        </option>
+                      ) : null;
+                    })}
+                  </select>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Loading State */}
+        {loading && <LoadingSkeleton />}
+
+        {/* Error State */}
+        {error && (
+          <div className="h-full flex flex-col items-center justify-center bg-background p-4">
+            <div className="text-destructive text-xl mb-4">
+              <FiAlertCircle className="w-12 h-12 mx-auto mb-4" />
+              Failed to load tasks
+            </div>
+            <div className="text-muted-foreground text-center mb-4">
+              {error}
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Kanban Board */}
+        {!loading && !error && (
+          <div className="p-4 overflow-x-auto bg-background/50">
+            <div className="flex gap-6 min-w-max">
+              {Object.entries({ ...TASK_STATUSES, ...Object.fromEntries(customStatuses.map(s => [s.id, s])) })
+                .map(([status, config]) => (
+                  <div key={status} className="w-[320px] flex flex-col">
+                    {/* Column Header */}
+                    <div className="mb-3 flex flex-col bg-card/90 rounded-lg border border-border hover:bg-card transition-all">
+                      <div className="p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <config.icon className="w-4 h-4 text-primary" />
+                          <h3 className="text-lg font-semibold text-foreground">
+                            {status === 'TODO' && <span className="bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-md">To Do</span>}
+                            {status === 'IN_PROGRESS' && <span className="bg-yellow-500/10 text-yellow-500 px-2 py-0.5 rounded-md">In Progress</span>}
+                            {status === 'IN_REVIEW' && <span className="bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded-md">In Review</span>}
+                            {status === 'DONE' && <span className="bg-green-500/10 text-green-500 px-2 py-0.5 rounded-md">Done</span>}
+                            {!['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'].includes(status) && <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-md">{config.label}</span>}
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">
+                            {getTasksByStatus(status).length} tasks
+                          </span>
+                          {project?.owner === currentUser?.email && (
+                            <button
+                              onClick={() => setShowStatusModal(true)}
+                              className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
+                            >
+                              <FiPlus className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="px-3 pb-2 flex flex-col gap-2 border-t border-border pt-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex space-x-3">
+                            <span className="text-primary">
+                              {getTasksByStatus(status).length} tasks
+                            </span>
+                            <span className="text-muted-foreground">
+                              {getTasksByStatus(status).filter(t => t.priority === 'high').length} high priority
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-1 text-muted-foreground">
+                            <span>{getTasksByStatus(status).filter(t => t.subtasks?.every(st => st.completed)).length}</span>
+                            <FiCheckCircle className="w-3.5 h-3.5" />
+                          </div>
+                        </div>
+
+                        {/* Column Analytics */}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="bg-muted/30 rounded-md p-1.5 flex items-center justify-between">
+                            <span className="text-muted-foreground">Avg Time</span>
+                            <span className="text-primary">
+                              {Math.round(getTasksByStatus(status)
+                                .filter(t => t.completedAt)
+                                .reduce((acc, t) => acc + (new Date(t.completedAt) - new Date(t.createdAt)), 0) /
+                                (getTasksByStatus(status).filter(t => t.completedAt).length || 1) /
+                                (1000 * 60 * 60 * 24))} days
+                            </span>
+                          </div>
+                          <div className="bg-muted/30 rounded-md p-1.5 flex items-center justify-between">
+                            <span className="text-muted-foreground">Due Soon</span>
+                            <span className={getTasksByStatus(status).filter(t =>
+                              t.deadline && new Date(t.deadline) > new Date() &&
+                              new Date(t.deadline) < new Date(Date.now() + 24 * 60 * 60 * 1000)
+                            ).length > 0 ? 'text-warning' : 'text-primary'}>
+                              {getTasksByStatus(status).filter(t =>
+                                t.deadline && new Date(t.deadline) > new Date() &&
+                                new Date(t.deadline) < new Date(Date.now() + 24 * 60 * 60 * 1000)
+                              ).length}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tasks Container */}
+                    <div
+                      onDragOver={(e) => handleDragOver(e, status)}
+                      onDrop={(e) => handleDrop(e, status)}
+                      className={`flex-1 p-2 rounded-lg bg-background/50 min-h-[calc(100vh-16rem)] transition-all border border-border backdrop-blur-sm
+                        ${dragOverStatus === status ? 'bg-primary/5 ring-2 ring-primary/20 border-primary/20' : ''}`}
+                    >
+                      {getTasksByStatus(status)
+                        .filter(task => task && task.id) // Add additional filter for safety
+                        .map((task) => (
+                          <motion.div
+                            key={task.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, task)}
+                            onDragEnd={handleDragEnd}
+                            className={`mb-3 cursor-move ${draggingTask?.id === task.id ? 'opacity-50' : ''}`}
+                            whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <div
+                              className={`group relative bg-card/80 rounded-lg border border-border p-3 shadow-lg hover:shadow-xl transition-all backdrop-blur-sm
+                                ${task.priority === 'high' ? 'ring-2 ring-destructive/20' :
+                                  task.priority === 'medium' ? 'ring-2 ring-warning/20' : ''}`}
+                            >
+                              {/* Hover Card */}
+                              <div
+                                className={`absolute invisible group-hover:visible opacity-0 group-hover:opacity-100 z-[60] p-4 bg-card border border-border rounded-lg shadow-lg w-80 -translate-y-2 transition-all duration-200`}
+                                style={{
+                                  top: '-0.5rem',
+                                  left: '50%',
+                                  transform: 'translate(-50%, -100%)',
+                                  pointerEvents: 'none',
+                                  backgroundColor: 'var(--background)',
+                                  boxShadow: '0 8px 24px -4px rgba(0, 0, 0, 0.15), 0 2px 8px -2px rgba(0, 0, 0, 0.1)',
+                                  opacity: draggingTask?.id === task.id ? 0 : undefined,
+                                  visibility: draggingTask?.id === task.id ? 'hidden' : undefined
+                                }}
+                              >
+                                <div className="flex flex-col gap-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium text-foreground">{task.title}</span>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${getPriorityColor(task.priority)}`}>
+                                      {task.priority}
+                                    </span>
+                                  </div>
+                                  {task.description && (
+                                    <p className="text-sm text-muted-foreground line-clamp-2">{task.description}</p>
+                                  )}
+                                  <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-1.5">
+                                        <FiClock className="w-3.5 h-3.5" />
+                                        <span>Created {formatTimestamp(task.createdAt)}</span>
+                                      </div>
+                                      {task.lastModified && (
+                                        <div className="flex items-center gap-1.5">
+                                          <FiFileText className="w-3.5 h-3.5" />
+                                          <span>Updated {formatTimestamp(task.lastModified)}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="space-y-2">
+                                      {task.deadline && (
+                                        <div className="flex items-center gap-1.5">
+                                          <FiClock className="w-3.5 h-3.5" />
+                                          <span>Due {formatTimestamp(task.deadline)}</span>
+                                        </div>
+                                      )}
+                                      {task.assignedTo && (
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="w-3.5 h-3.5 rounded-full bg-primary/10 flex items-center justify-center">
+                                            <span className="text-[10px] text-primary font-medium">
+                                              {task.assignedTo.charAt(0).toUpperCase()}
+                                            </span>
+                                          </div>
+                                          <span>{task.assignedTo}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {task.subtasks?.length > 0 && (
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="text-muted-foreground">Progress</span>
+                                        <span className="text-foreground font-medium">
+                                          {Math.round((task.subtasks.filter(st => st.completed).length / task.subtasks.length) * 100)}%
+                                        </span>
+                                      </div>
+                                      <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                                        <div
+                                          className="h-full bg-primary transition-all"
+                                          style={{
+                                            width: `${(task.subtasks.filter(st => st.completed).length / task.subtasks.length) * 100}%`
+                                          }}
+                                        />
+                                      </div>
+                                      <div className="text-xs space-y-1">
+                                        {task.subtasks.map(subtask => (
+                                          <div key={subtask.id} className="flex items-center gap-2">
+                                            <div className={`w-1.5 h-1.5 rounded-full ${subtask.completed ? 'bg-primary' : 'bg-muted'}`} />
+                                            <span className={subtask.completed ? 'text-muted-foreground line-through' : 'text-foreground'}>
+                                              {subtask.title}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Existing Task Card Content */}
+                              <div className="flex items-start justify-between mb-2">
+                                <h4 className="font-medium text-card-foreground">{task.title}</h4>
+                                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() => togglePinTask(task)}
+                                    className={`p-1 rounded hover:bg-muted ${pinnedTasks.some(t => t.id === task.id)
+                                      ? 'text-warning'
+                                      : 'text-muted-foreground hover:text-warning'
+                                      }`}
+                                  >
+                                    <FiStar className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedTask(task);
+                                      setShowSubtaskModal(true);
+                                    }}
+                                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-primary"
+                                  >
+                                    <FiFileText className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Rest of the existing task card content */}
+                              {task.description && (
+                                <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                                  {task.description}
+                                </p>
+                              )}
+
+                              {/* Due Date Indicator */}
+                              {task.deadline && (
+                                <div className="mb-2 flex items-center text-xs">
+                                  <FiClock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
+                                  <span className={`${new Date(task.deadline) < new Date()
+                                    ? 'text-destructive'
+                                    : new Date(task.deadline) < new Date(Date.now() + 24 * 60 * 60 * 1000)
+                                      ? 'text-warning'
+                                      : 'text-muted-foreground'
+                                    }`}>
+                                    Due {new Date(task.deadline).toLocaleDateString()} {new Date(task.deadline).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Task Progress Bar */}
+                              {task.subtasks && task.subtasks.length > 0 && (
+                                <div className="mb-3">
+                                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                                    <span>Progress</span>
+                                    <span>{Math.round((task.subtasks.filter(st => st.completed).length / task.subtasks.length) * 100)}%</span>
+                                  </div>
+                                  <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-primary transition-all duration-300 rounded-full"
+                                      style={{ width: `${(task.subtasks.filter(st => st.completed).length / task.subtasks.length) * 100}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="flex items-center justify-between text-xs">
+                                <div className="flex items-center space-x-2">
+                                  <span className={`px-2 py-1 rounded-full backdrop-blur-sm ${task.priority === 'high'
+                                    ? 'bg-destructive/10 text-destructive'
+                                    : task.priority === 'medium'
+                                      ? 'bg-warning/10 text-warning'
+                                      : 'bg-primary/10 text-primary'
+                                    }`}>
+                                    {task.priority}
+                                  </span>
+                                  {task.createdAt && (
+                                    <span className="text-muted-foreground flex items-center">
+                                      <FiClock className="w-3.5 h-3.5 mr-1" />
+                                      {Math.round((Date.now() - new Date(task.createdAt)) / (1000 * 60 * 60 * 24))}d
+                                    </span>
+                                  )}
+                                </div>
+                                {task.assignedTo && (
+                                  <div className="flex items-center text-muted-foreground">
+                                    <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary mr-1 text-xs">
+                                      {task.assignedTo.charAt(0).toUpperCase()}
+                                    </span>
+                                    <span>{task.assignedTo.split('@')[0]}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      {dragOverStatus === status && (
+                        <div className="h-20 border-2 border-dashed border-primary/20 rounded-lg bg-primary/5 backdrop-blur-sm" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
         {/* Task Statistics */}
-        <div className="p-4 bg-slate-800/50 border-t border-slate-700">
-          <div className="flex justify-between text-sm text-slate-400">
-            <div>Total Tasks: {filteredTasks.length}</div>
-            <div>Filtered Tasks: {filteredTasks.length} / {tasks.length}</div>
+        <div className="p-3 bg-card/50 border-t border-border backdrop-blur-sm">
+          <div className="flex justify-between text-sm text-card-foreground">
+            <div>Total Tasks: {tasks.length}</div>
+            <div>Filtered Tasks: {getFilteredTasks().length} / {tasks.length}</div>
             <div>Last Updated: {formatTimestamp(lastUpdate)}</div>
           </div>
         </div>
 
-        {/* Subtask Modal */}
-        {showSubtaskModal && <SubtaskModal />}
+        {/* Modals */}
+        {showSubtaskModal && (
+          <SubtaskModal
+            selectedTask={selectedTask}
+            setSelectedTask={setSelectedTask}
+            setShowSubtaskModal={setShowSubtaskModal}
+            newSubtask={newSubtask}
+            setNewSubtask={setNewSubtask}
+            currentUser={currentUser}
+          />
+        )}
+        {isAddingTask && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50">
+            <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg">
+              <div className="bg-background border border-border rounded-lg shadow-lg">
+                <div className="p-6 border-b border-border">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-primary">Create New Task</h2>
+                    <button
+                      onClick={() => setIsAddingTask(false)}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <FiX className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">Add a new task to your board</p>
+                </div>
+                <form onSubmit={handleCreateTask} className="p-6 space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="title" className="text-sm font-medium text-primary">
+                      Title
+                    </label>
+                    <input
+                      id="title"
+                      type="text"
+                      value={newTask.title}
+                      onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                      className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                      placeholder="Enter task title"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="description" className="text-sm font-medium text-primary">
+                      Description
+                    </label>
+                    <textarea
+                      id="description"
+                      value={newTask.description}
+                      onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                      className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary min-h-[100px] resize-none"
+                      placeholder="Enter task description"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label htmlFor="priority" className="text-sm font-medium text-primary">
+                        Priority
+                      </label>
+                      <select
+                        id="priority"
+                        value={newTask.priority}
+                        onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
+                        className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="status" className="text-sm font-medium text-primary">
+                        Status
+                      </label>
+                      <select
+                        id="status"
+                        value={newTask.status}
+                        onChange={(e) => setNewTask({ ...newTask, status: e.target.value })}
+                        className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                      >
+                        {Object.entries(TASK_STATUSES).map(([key, { label }]) => (
+                          <option key={key} value={key}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="assignee" className="text-sm font-medium text-primary">
+                      Assign To
+                    </label>
+                    <select
+                      id="assignee"
+                      value={newTask.assignedTo || ''}
+                      onChange={(e) => setNewTask({ ...newTask, assignedTo: e.target.value })}
+                      className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    >
+                      <option value="">Select Assignee</option>
+                      {project?.members?.map((member) => {
+                        const memberEmail = typeof member === 'object' ? member.email : member;
+                        const displayName = typeof member === 'object' ?
+                          (member.displayName || member.email?.split('@')[0] || memberEmail) :
+                          member?.split('@')[0] || member;
+
+                        return memberEmail ? (
+                          <option key={memberEmail} value={memberEmail}>
+                            {displayName}
+                          </option>
+                        ) : null;
+                      })}
+                    </select>
+                  </div>
+                  <div className="pt-4 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingTask(false)}
+                      className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      Create Task
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Member Suggestions Dropdown */}
+        {showSuggestions && memberSuggestions.length > 0 && (
+          <div className="absolute z-10 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            {memberSuggestions.map(member => {
+              const memberEmail = typeof member === 'object' ? member.email : member;
+              const displayName = typeof member === 'object' ? member.displayName || member.email : member;
+
+              return memberEmail ? (
+                <button
+                  key={memberEmail}
+                  onClick={() => handleMemberSelect(memberEmail)}
+                  className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 focus:outline-none focus:bg-slate-700"
+                >
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center mr-2">
+                      {displayName.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-medium">{displayName.split('@')[0]}</div>
+                      <div className="text-xs text-slate-400">{memberEmail}</div>
+                    </div>
+                  </div>
+                </button>
+              ) : null;
+            })}
+          </div>
+        )}
+
+        {/* Custom Status Modal */}
+        {showStatusModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="w-full max-w-sm bg-background rounded-xl shadow-xl border border-border">
+              <div className="p-4 border-b border-border">
+                <h3 className="text-xl font-semibold text-primary">Add Custom Status</h3>
+                <p className="text-sm text-muted-foreground mt-1">Create a new status column for your tasks</p>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-primary">Status Name</label>
+                  <input
+                    type="text"
+                    value={newStatusName}
+                    onChange={(e) => setNewStatusName(e.target.value)}
+                    placeholder="Enter status name..."
+                    className="w-full px-4 py-3 bg-card text-foreground border border-border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-primary">Status Color</label>
+                  <input
+                    type="color"
+                    value={newStatusColor}
+                    onChange={(e) => setNewStatusColor(e.target.value)}
+                    className="w-full h-12 rounded-lg cursor-pointer bg-card border border-border p-1"
+                  />
+                </div>
+              </div>
+
+              <div className="p-4 border-t border-border flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowStatusModal(false)}
+                  className="px-4 py-2 text-foreground hover:bg-muted rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddCustomStatus}
+                  className="px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors"
+                >
+                  Add Status
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </DragDropContext>
   );

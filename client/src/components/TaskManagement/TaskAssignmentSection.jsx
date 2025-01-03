@@ -804,7 +804,7 @@ const TaskAssignmentSection = ({ projectId, members }) => {
     const renderSubtasks = (task) => (
         <div className="mt-4 border-t border-border pt-4">
             <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-medium text-foreground">Subtasks</h4>
+                <h4 className="text-sm font-medium text-primary">Subtasks</h4>
                 {task.assignedTo === currentUser?.email && (
                     <div className="flex items-center gap-2">
                         <input
@@ -820,7 +820,7 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                                 }
                             }}
                             placeholder="Add a subtask"
-                            className="px-2 py-1 text-sm bg-background border border-border rounded"
+                            className="px-2 py-1 text-sm bg-card text-foreground border border-border rounded focus:ring-2 focus:ring-primary focus:border-primary"
                         />
                         <button
                             onClick={() => handleAddSubtaskToExisting(task.id)}
@@ -898,15 +898,15 @@ const TaskAssignmentSection = ({ projectId, members }) => {
     // Update the status control section in the task card
     const renderStatusControl = (task) => (
         <div className="mt-4 flex items-center gap-2">
-            <label className="text-sm text-muted-foreground">Status:</label>
+            <label className="text-sm text-primary">Status:</label>
             <select
                 value={task.status}
                 onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                className={`px-3 py-1.5 text-sm rounded-md border ${task.status === 'COMPLETED'
+                className={`px-3 py-1.5 text-sm rounded-md border focus:ring-2 focus:ring-primary focus:border-primary ${task.status === 'COMPLETED'
                     ? 'bg-success/10 border-success/20 text-success'
                     : task.status === 'IN_PROGRESS'
                         ? 'bg-primary/10 border-primary/20 text-primary'
-                        : 'bg-background border-border text-muted-foreground'
+                        : 'bg-card border-border text-foreground'
                     }`}
             >
                 <option value="TODO">To Do</option>
@@ -982,7 +982,7 @@ const TaskAssignmentSection = ({ projectId, members }) => {
         <div className="bg-background p-6 rounded-lg border border-border">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold text-foreground">Task Management</h2>
+                <h2 className="text-xl font-semibold text-primary">Task Management</h2>
                 <div className="flex items-center gap-4">
                     {/* Pomodoro Display */}
                     <div className="flex items-center gap-2 px-4 py-2 bg-card rounded-lg border border-border">
@@ -1032,7 +1032,7 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                 <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-3 py-2 bg-background border border-border rounded-lg text-sm"
+                    className="px-3 py-2 bg-card text-foreground border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                 >
                     <option value="all">All Status</option>
                     <option value="TODO">To Do</option>
@@ -1043,7 +1043,7 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                 <select
                     value={filterAssigned}
                     onChange={(e) => setFilterAssigned(e.target.value)}
-                    className="px-3 py-2 bg-background border border-border rounded-lg text-sm"
+                    className="px-3 py-2 bg-card text-foreground border border-border rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                 >
                     <option value="all">All Tasks</option>
                     <option value="assigned">Assigned</option>
@@ -1082,7 +1082,7 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                             <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-2">
-                                        <h3 className="font-medium text-foreground">{task.title}</h3>
+                                        <h3 className="font-medium text-primary">{task.title}</h3>
                                         {task.assignedTo === currentUser?.email && (
                                             <span className="px-2 py-1 text-xs bg-primary/20 text-primary rounded">
                                                 Assigned to you
@@ -1166,7 +1166,7 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                 <div className="fixed inset-0 flex items-center justify-center z-50">
                     <div className="bg-background rounded-lg shadow-lg w-full max-w-lg mx-4">
                         <div className="flex justify-between items-center p-4 border-b border-border">
-                            <h3 className="text-lg font-semibold">Create New Task</h3>
+                            <h3 className="text-lg font-semibold text-primary">Create New Task</h3>
                             <button
                                 onClick={() => setShowNewTaskForm(false)}
                                 className="text-muted-foreground hover:text-foreground"
@@ -1177,32 +1177,32 @@ const TaskAssignmentSection = ({ projectId, members }) => {
 
                         <form onSubmit={handleCreateTask} className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium mb-1">Title</label>
+                                <label className="block text-sm font-medium text-primary mb-1">Title</label>
                                 <input
                                     type="text"
                                     value={newTask.title}
                                     onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                                    className="w-full px-3 py-2 bg-background border border-border rounded-md"
+                                    className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
                                     required
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Description</label>
+                                <label className="block text-sm font-medium text-primary mb-1">Description</label>
                                 <textarea
                                     value={newTask.description}
                                     onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                                    className="w-full px-3 py-2 bg-background border border-border rounded-md"
+                                    className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
                                     rows={3}
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Assign To</label>
+                                <label className="block text-sm font-medium text-primary mb-1">Assign To</label>
                                 <select
                                     value={newTask.assignedTo}
                                     onChange={(e) => setNewTask({ ...newTask, assignedTo: e.target.value })}
-                                    className="w-full px-3 py-2 bg-background border border-border rounded-md"
+                                    className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
                                 >
                                     <option value="">Select User</option>
                                     {members.map(member => (
@@ -1214,21 +1214,21 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Due Date</label>
+                                <label className="block text-sm font-medium text-primary mb-1">Due Date</label>
                                 <input
                                     type="datetime-local"
                                     value={newTask.dueDate}
                                     onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                                    className="w-full px-3 py-2 bg-background border border-border rounded-md"
+                                    className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Priority</label>
+                                <label className="block text-sm font-medium text-primary mb-1">Priority</label>
                                 <select
                                     value={newTask.priority}
                                     onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-                                    className="w-full px-3 py-2 bg-background border border-border rounded-md"
+                                    className="w-full px-3 py-2 bg-card text-foreground border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
                                 >
                                     <option value="low">Low</option>
                                     <option value="medium">Medium</option>
@@ -1237,7 +1237,7 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Subtasks</label>
+                                <label className="block text-sm font-medium text-primary mb-1">Subtasks</label>
                                 <div className="space-y-2">
                                     {newTask.subtasks.map((subtask, index) => (
                                         <div key={index} className="flex items-center gap-2">
@@ -1257,7 +1257,7 @@ const TaskAssignmentSection = ({ projectId, members }) => {
                                             value={newSubtask}
                                             onChange={(e) => setNewSubtask(e.target.value)}
                                             placeholder="Add a subtask"
-                                            className="flex-1 px-3 py-2 bg-background border border-border rounded-md"
+                                            className="flex-1 px-3 py-2 bg-card text-foreground border border-border rounded-md focus:ring-2 focus:ring-primary focus:border-primary"
                                         />
                                         <button
                                             type="button"
