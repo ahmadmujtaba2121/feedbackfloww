@@ -9,6 +9,12 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { toast } from 'react-hot-toast';
 import TaskCard from './TaskCard';
 
+const formatTaskDate = (date) => {
+  if (!date) return '';
+  const taskDate = new Date(date);
+  return format(taskDate, 'MMM d, h:mm a');
+};
+
 const CalendarDay = ({ dateKey, tasks = [], isCurrentMonth, isOwner, isTodays, isSelected, onSelectDate }) => {
   const { currentTheme } = useTheme();
   const date = new Date(dateKey);
@@ -27,7 +33,7 @@ const CalendarDay = ({ dateKey, tasks = [], isCurrentMonth, isOwner, isTodays, i
           {...provided.droppableProps}
           onClick={() => onSelectDate(date)}
           className={`
-            min-h-[120px] p-2 rounded-lg border transition-all duration-200 cursor-pointer
+            min-h-[80px] sm:min-h-[120px] p-1 sm:p-2 rounded-lg border transition-all duration-200 cursor-pointer
             ${isCurrentMonth ? 'bg-background/50 border-border' : 'bg-background/20 border-border/50'}
             ${isTodays ? 'ring-2 ring-primary/50' : ''}
             ${isSelected ? 'ring-2 ring-primary' : ''}
@@ -36,9 +42,9 @@ const CalendarDay = ({ dateKey, tasks = [], isCurrentMonth, isOwner, isTodays, i
             hover:border-primary/50 hover:shadow-sm
           `}
         >
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1 sm:mb-2">
             <span className={`
-              text-sm px-2 py-0.5 rounded-full font-medium
+              text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 rounded-full font-medium
               ${isTodays ? 'bg-primary text-primary-foreground' : ''}
               ${isCurrentMonth ? 'text-foreground/90' : 'text-foreground/50'}
               ${hasTasksDueToday ? 'font-semibold' : ''}
@@ -46,12 +52,12 @@ const CalendarDay = ({ dateKey, tasks = [], isCurrentMonth, isOwner, isTodays, i
               {format(date, 'd')}
             </span>
             {hasTasksDueToday && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+              <span className="text-[10px] sm:text-xs px-1 sm:px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
                 {tasks.length} task{tasks.length !== 1 ? 's' : ''}
               </span>
             )}
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1 sm:space-y-2 overflow-y-auto max-h-[120px] sm:max-h-[200px] scrollbar-thin scrollbar-thumb-border scrollbar-track-background/50">
             {tasks.map((task, index) => (
               <TaskCard
                 key={task.id}
@@ -105,25 +111,35 @@ const CalendarView = ({ projectId }) => {
 
   // Filter and group tasks
   const filteredTasksByDate = useMemo(() => {
-    return tasks
-      .filter(task => {
-        if (!showCompletedTasks && task.status === 'COMPLETED') return false;
-        if (!showOverdueTasks && task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'COMPLETED') return false;
+    const filtered = tasks.filter(task => {
+      if (!showCompletedTasks && task.status === 'COMPLETED') return false;
+      if (!showOverdueTasks && task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'COMPLETED') return false;
 
-        const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          task.description?.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
-        const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
+      const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        task.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+      const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
 
-        return matchesSearch && matchesStatus && matchesPriority;
-      })
-      .reduce((acc, task) => {
-        if (!task.dueDate) return acc;
+      return matchesSearch && matchesStatus && matchesPriority;
+    });
+
+    // Group tasks by date
+    return filtered.reduce((acc, task) => {
+      if (!task.dueDate) {
+        // If no due date, add to today's date
+        const todayKey = format(new Date(), 'yyyy-MM-dd');
+        if (!acc[todayKey]) acc[todayKey] = [];
+        acc[todayKey].push({
+          ...task,
+          isUnscheduled: true
+        });
+      } else {
         const dateKey = format(new Date(task.dueDate), 'yyyy-MM-dd');
         if (!acc[dateKey]) acc[dateKey] = [];
         acc[dateKey].push(task);
-        return acc;
-      }, {});
+      }
+      return acc;
+    }, {});
   }, [tasks, searchQuery, statusFilter, priorityFilter, showOverdueTasks, showCompletedTasks]);
 
   const handleDragEnd = async (result) => {
@@ -207,7 +223,8 @@ const CalendarView = ({ projectId }) => {
       total: tasks.length,
       completed: tasks.filter(t => t.status === 'COMPLETED').length,
       overdue: tasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'COMPLETED').length,
-      dueToday: tasks.filter(t => t.dueDate && format(new Date(t.dueDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')).length
+      dueToday: tasks.filter(t => t.dueDate && format(new Date(t.dueDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')).length,
+      unscheduled: tasks.filter(t => !t.dueDate).length
     };
     stats.inProgress = stats.total - stats.completed;
     return stats;
@@ -217,7 +234,7 @@ const CalendarView = ({ projectId }) => {
     <div className="h-full flex flex-col">
       {/* Calendar Header */}
       <div className="p-4 bg-background border-b border-border">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col space-y-4 lg:space-y-0 lg:flex-row lg:items-center lg:justify-between mb-4">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => setCurrentDate(subMonths(currentDate, 1))}
@@ -236,27 +253,32 @@ const CalendarView = ({ projectId }) => {
             </button>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             {/* Task Statistics */}
-            <div className="flex items-center gap-3 px-4 py-2 bg-background/50 rounded-lg border border-border">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 px-4 py-2 bg-background/50 rounded-lg border border-border overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-background/50">
+              <div className="flex items-center gap-2 whitespace-nowrap">
                 <span className="text-xs font-semibold text-foreground/90">{taskStats.total}</span>
                 <span className="text-xs text-foreground/70">Total</span>
               </div>
               <div className="w-px h-4 bg-border/50" />
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 whitespace-nowrap">
                 <span className="text-xs font-semibold text-success/90">{taskStats.completed}</span>
                 <span className="text-xs text-foreground/70">Done</span>
               </div>
               <div className="w-px h-4 bg-border/50" />
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 whitespace-nowrap">
                 <span className="text-xs font-semibold text-destructive/90">{taskStats.overdue}</span>
                 <span className="text-xs text-foreground/70">Overdue</span>
               </div>
               <div className="w-px h-4 bg-border/50" />
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 whitespace-nowrap">
                 <span className="text-xs font-semibold text-warning/90">{taskStats.dueToday}</span>
                 <span className="text-xs text-foreground/70">Today</span>
+              </div>
+              <div className="w-px h-4 bg-border/50" />
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                <span className="text-xs font-semibold text-primary/90">{taskStats.unscheduled}</span>
+                <span className="text-xs text-foreground/70">Unscheduled</span>
               </div>
             </div>
 
@@ -283,15 +305,15 @@ const CalendarView = ({ projectId }) => {
             </div>
 
             {/* Search and Filters */}
-            <div className="flex items-center gap-2">
-              <div className="relative">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[200px] lg:min-w-[240px]">
                 <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search tasks..."
-                  className="pl-9 pr-4 py-2 bg-muted border border-input rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  className="w-full pl-9 pr-4 py-2 bg-muted border border-input rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                 />
               </div>
 
@@ -343,7 +365,7 @@ const CalendarView = ({ projectId }) => {
             {project?.owner === currentUser?.email && (
               <button
                 onClick={() => setShowCreateTask(!showCreateTask)}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center space-x-2"
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center space-x-2 whitespace-nowrap"
               >
                 <FiPlus className="w-5 h-5" />
                 <span>Add Task</span>
@@ -468,36 +490,41 @@ const CalendarView = ({ projectId }) => {
       {/* Calendar Grid */}
       <div className="flex-1 p-4 overflow-auto">
         <DragDropContext onDragEnd={handleDragEnd}>
-          <div className="grid grid-cols-7 gap-4">
+          <div className="min-w-full">
             {/* Weekday Headers */}
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-              <div key={day} className="text-center text-sm font-semibold text-foreground/80 mb-2">
-                {day}
-              </div>
-            ))}
+            <div className="grid grid-cols-7 gap-4 mb-4">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <div key={day} className="text-center">
+                  <span className="text-sm font-semibold text-foreground/80 hidden sm:block">{day}</span>
+                  <span className="text-sm font-semibold text-foreground/80 sm:hidden">{day.charAt(0)}</span>
+                </div>
+              ))}
+            </div>
 
             {/* Calendar Days */}
-            {calendarDays.map(day => {
-              const dateKey = format(day, 'yyyy-MM-dd');
-              const dayTasks = filteredTasksByDate[dateKey] || [];
-              const isCurrentMonth = isSameMonth(day, currentDate);
-              const isOwner = project?.owner === currentUser?.email;
-              const isTodays = isToday(day);
-              const isSelected = dateKey === selectedDate;
+            <div className="grid grid-cols-7 gap-2 sm:gap-4 auto-rows-fr">
+              {calendarDays.map(day => {
+                const dateKey = format(day, 'yyyy-MM-dd');
+                const dayTasks = filteredTasksByDate[dateKey] || [];
+                const isCurrentMonth = isSameMonth(day, currentDate);
+                const isOwner = project?.owner === currentUser?.email;
+                const isTodays = isToday(day);
+                const isSelected = dateKey === selectedDate;
 
-              return (
-                <CalendarDay
-                  key={dateKey}
-                  dateKey={dateKey}
-                  tasks={dayTasks}
-                  isCurrentMonth={isCurrentMonth}
-                  isOwner={isOwner}
-                  isTodays={isTodays}
-                  isSelected={isSelected}
-                  onSelectDate={handleSelectDate}
-                />
-              );
-            })}
+                return (
+                  <CalendarDay
+                    key={dateKey}
+                    dateKey={dateKey}
+                    tasks={dayTasks}
+                    isCurrentMonth={isCurrentMonth}
+                    isOwner={isOwner}
+                    isTodays={isTodays}
+                    isSelected={isSelected}
+                    onSelectDate={handleSelectDate}
+                  />
+                );
+              })}
+            </div>
           </div>
         </DragDropContext>
       </div>
