@@ -13,8 +13,7 @@ import {
   FiMaximize2,
   FiSave,
   FiChevronLeft,
-  FiChevronRight,
-  FiCode
+  FiChevronRight
 } from 'react-icons/fi';
 import { db } from '../../firebase/firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -50,8 +49,7 @@ const ToolBar = ({
     { id: 'circle', icon: FiCircle, name: 'Circle (C)' },
     { id: 'arrow', icon: FiArrowRight, name: 'Arrow (A)' },
     { id: 'text', icon: FiType, name: 'Text (T)' },
-    { id: 'comment', icon: FiMessageCircle, name: 'Comment (M)' },
-    { id: 'code', icon: FiCode, name: 'Code Block (D)' }
+    { id: 'comment', icon: FiMessageCircle, name: 'Comment (M)' }
   ];
 
   const handleSave = async () => {
