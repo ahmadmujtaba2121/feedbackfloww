@@ -118,13 +118,13 @@ const InvoiceSection = ({ projectId }) => {
 
             {/* Time Summary by User */}
             <div className="mb-6">
-                <h3 className="text-lg font-medium text-foreground mb-4">Time Summary by User</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-4">Time Summary by User</h3>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {Object.entries(timeByUser).map(([userId, data]) => (
-                        <div key={userId} className="p-4 bg-card rounded-lg border border-border">
+                        <div key={userId} className="p-4 bg-card rounded-lg border border-border hover:bg-accent/50 transition-colors">
                             <div className="flex items-center gap-2 mb-2">
-                                <FiUser className="w-4 h-4 text-muted-foreground" />
-                                <span className="font-medium">{userId}</span>
+                                <FiUser className="w-4 h-4 text-primary" />
+                                <span className="font-medium text-foreground">{userId}</span>
                             </div>
                             <div className="text-2xl font-bold text-foreground mb-1">
                                 {formatDuration(data.totalTime)}
@@ -139,10 +139,10 @@ const InvoiceSection = ({ projectId }) => {
 
             {/* Task Time Details */}
             <div className="mb-6">
-                <h3 className="text-lg font-medium text-foreground mb-4">Task Time Details</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-4">Task Time Details</h3>
                 <div className="space-y-4">
                     {taskTimeDetails.map(task => (
-                        <div key={task.id} className="p-4 bg-card rounded-lg border border-border">
+                        <div key={task.id} className="p-4 bg-card hover:bg-accent/50 rounded-lg border border-border transition-colors">
                             <div className="flex justify-between items-start">
                                 <div>
                                     <h4 className="font-medium text-foreground">{task.title}</h4>
@@ -155,7 +155,7 @@ const InvoiceSection = ({ projectId }) => {
                                         {formatDuration(task.totalTime)}
                                     </div>
                                     {invoiceDetails.rate > 0 && (
-                                        <div className="text-sm text-primary">
+                                        <div className="text-sm text-primary font-medium">
                                             {formatCurrency(task.billableAmount)}
                                         </div>
                                     )}
@@ -164,9 +164,15 @@ const InvoiceSection = ({ projectId }) => {
                             {/* Time Log Details */}
                             <div className="mt-4 space-y-2">
                                 {task.timeLogs.map((log, index) => (
-                                    <div key={index} className="text-sm text-muted-foreground flex justify-between">
-                                        <span>{new Date(log.startTime).toLocaleDateString()}</span>
-                                        <span>{formatDuration(log.duration)}</span>
+                                    <div key={index} className="text-sm flex justify-between items-center p-2 rounded-md bg-background hover:bg-accent/30 transition-colors">
+                                        <span className="text-muted-foreground flex items-center gap-2">
+                                            <FiCalendar className="w-3.5 h-3.5" />
+                                            {new Date(log.startTime).toLocaleDateString()}
+                                        </span>
+                                        <span className="text-foreground font-medium flex items-center gap-2">
+                                            <FiClock className="w-3.5 h-3.5" />
+                                            {formatDuration(log.duration)}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
@@ -183,31 +189,31 @@ const InvoiceSection = ({ projectId }) => {
                     exit={{ opacity: 0 }}
                     className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center"
                 >
-                    <div className="bg-card p-6 rounded-lg border border-border w-full max-w-2xl">
-                        <h3 className="text-lg font-medium text-foreground mb-4">Create New Invoice</h3>
+                    <div className="bg-card p-6 rounded-lg border border-border shadow-lg w-full max-w-2xl">
+                        <h3 className="text-lg font-semibold text-foreground mb-4">Create New Invoice</h3>
                         {/* Invoice creation form */}
                         <div className="space-y-4">
                             {/* Rate and Currency */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-muted-foreground mb-1">
+                                    <label className="block text-sm font-medium text-foreground mb-1">
                                         Hourly Rate
                                     </label>
                                     <input
                                         type="number"
                                         value={invoiceDetails.rate}
                                         onChange={(e) => setInvoiceDetails(prev => ({ ...prev, rate: parseFloat(e.target.value) }))}
-                                        className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
+                                        className="w-full px-3 py-2 bg-background text-foreground rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-muted-foreground mb-1">
+                                    <label className="block text-sm font-medium text-foreground mb-1">
                                         Currency
                                     </label>
                                     <select
                                         value={invoiceDetails.currency}
                                         onChange={(e) => setInvoiceDetails(prev => ({ ...prev, currency: e.target.value }))}
-                                        className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
+                                        className="w-full px-3 py-2 bg-background text-foreground rounded-lg border border-input focus:ring-2 focus:ring-primary/20 focus:border-primary"
                                     >
                                         <option value="USD">USD</option>
                                         <option value="EUR">EUR</option>
@@ -218,12 +224,12 @@ const InvoiceSection = ({ projectId }) => {
 
                             {/* Task Selection */}
                             <div>
-                                <label className="block text-sm font-medium text-muted-foreground mb-1">
+                                <label className="block text-sm font-medium text-foreground mb-1">
                                     Select Tasks to Invoice
                                 </label>
-                                <div className="space-y-2 max-h-60 overflow-y-auto">
+                                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                                     {taskTimeDetails.map(task => (
-                                        <label key={task.id} className="flex items-center gap-2">
+                                        <label key={task.id} className="flex items-center gap-2 p-2 rounded-lg bg-background hover:bg-accent/30 transition-colors cursor-pointer">
                                             <input
                                                 type="checkbox"
                                                 checked={selectedTasks.includes(task.id)}
@@ -234,10 +240,10 @@ const InvoiceSection = ({ projectId }) => {
                                                         setSelectedTasks(prev => prev.filter(id => id !== task.id));
                                                     }
                                                 }}
-                                                className="rounded border-input"
+                                                className="rounded border-input text-primary focus:ring-primary/20"
                                             />
-                                            <span className="text-sm text-foreground">{task.title}</span>
-                                            <span className="text-sm text-muted-foreground ml-auto">
+                                            <span className="text-sm text-foreground flex-1">{task.title}</span>
+                                            <span className="text-sm text-muted-foreground">
                                                 {formatDuration(task.totalTime)}
                                             </span>
                                         </label>
@@ -246,18 +252,18 @@ const InvoiceSection = ({ projectId }) => {
                             </div>
 
                             {/* Actions */}
-                            <div className="flex justify-end gap-2">
+                            <div className="flex justify-end gap-2 pt-4 border-t border-border">
                                 <button
                                     onClick={() => setShowNewInvoice(false)}
-                                    className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90"
+                                    className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleCreateInvoice}
-                                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+                                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                                 >
-                                    Create Invoice
+                                    Generate Invoice
                                 </button>
                             </div>
                         </div>

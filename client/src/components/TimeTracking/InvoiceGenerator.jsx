@@ -4,6 +4,7 @@ import { db } from '../../firebase/firebase';
 import { FiDownload, FiDollarSign, FiPlus, FiClock, FiCheck, FiAlertCircle } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { generateInvoiceNumber } from '../../utils/timeTracking';
+import { cn } from '../../utils/cn';
 
 const INVOICE_TEMPLATES = {
   default: {
@@ -456,178 +457,314 @@ const InvoiceGenerator = ({ projectId }) => {
   );
 
   return (
-    <div className="space-y-6">
-      {renderTemplateSelector()}
-      {renderInvoiceStatus()}
+    <div className="bg-background/95 p-6 rounded-lg border border-border/40">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-primary-foreground">Invoicing</h2>
+          <p className="text-sm text-muted-foreground/80">Create and manage your invoices</p>
+        </div>
+        <button
+          onClick={generateInvoice}
+          disabled={selectedEntries.size === 0}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg",
+            "bg-primary/90 text-primary-foreground",
+            "hover:bg-primary transition-colors",
+            "disabled:opacity-50 disabled:pointer-events-none"
+          )}
+        >
+          <FiDownload className="w-4 h-4" />
+          Generate Invoice
+        </button>
+      </div>
 
-      {/* Client Details Section */}
-      <div className="bg-slate-700/50 rounded-lg p-4">
-        <h3 className="text-white font-medium mb-4">Client Details</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <input
-            type="text"
-            placeholder="Client Name"
-            value={clientDetails.name}
-            onChange={(e) => setClientDetails(prev => ({ ...prev, name: e.target.value }))}
-            className="bg-slate-600 text-white rounded px-3 py-2"
-          />
-          <input
-            type="email"
-            placeholder="Client Email"
-            value={clientDetails.email}
-            onChange={(e) => setClientDetails(prev => ({ ...prev, email: e.target.value }))}
-            className="bg-slate-600 text-white rounded px-3 py-2"
-          />
-          <input
-            type="text"
-            placeholder="Company Name"
-            value={clientDetails.company}
-            onChange={(e) => setClientDetails(prev => ({ ...prev, company: e.target.value }))}
-            className="bg-slate-600 text-white rounded px-3 py-2"
-          />
-          <input
-            type="text"
-            placeholder="Address"
-            value={clientDetails.address}
-            onChange={(e) => setClientDetails(prev => ({ ...prev, address: e.target.value }))}
-            className="bg-slate-600 text-white rounded px-3 py-2"
-          />
+      {/* Invoice Template Selection */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-lg font-semibold text-primary-foreground">Invoice Template</h3>
+          <span className="text-sm text-muted-foreground/80">Choose your preferred layout</span>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Object.entries(INVOICE_TEMPLATES).map(([key, template]) => (
+            <button
+              key={key}
+              onClick={() => setSelectedTemplate(key)}
+              className={cn(
+                "group relative p-4 rounded-lg border transition-colors text-left",
+                selectedTemplate === key
+                  ? "bg-accent/30 border-primary/40"
+                  : "bg-card/30 border-border/40 hover:bg-accent/20"
+              )}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                {selectedTemplate === key && (
+                  <div className="absolute right-2 top-2">
+                    <FiCheck className="w-4 h-4 text-primary" />
+                  </div>
+                )}
+                <span className="font-medium text-primary-foreground">
+                  {template.name}
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground/80">
+                {template.name === 'Default' && 'Clean and simple layout for professional invoices'}
+                {template.name === 'Professional' && 'Modern design with enhanced visual hierarchy'}
+                {template.name === 'Minimal' && 'Streamlined format focusing on essential details'}
+              </p>
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Payment Details Section */}
-      <div className="bg-slate-700/50 rounded-lg p-4">
-        <h3 className="text-white font-medium mb-4">Payment Details</h3>
-        <select
-          value={paymentDetails.method}
-          onChange={(e) => setPaymentDetails(prev => ({ ...prev, method: e.target.value }))}
-          className="w-full bg-slate-600 text-white rounded px-3 py-2 mb-4"
-        >
-          <option value="bank">Bank Transfer</option>
-          <option value="paypal">PayPal</option>
-          <option value="payoneer">Payoneer</option>
-          <option value="other">Other</option>
-        </select>
-
-        {paymentDetails.method === 'bank' && (
-          <div className="grid grid-cols-2 gap-4">
+      {/* Client Details */}
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold text-primary-foreground mb-4">Client Details</h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+              Client Name
+            </label>
             <input
               type="text"
-              placeholder="Bank Name"
-              value={paymentDetails.bankDetails.bankName}
-              onChange={(e) => setPaymentDetails(prev => ({
-                ...prev,
-                bankDetails: { ...prev.bankDetails, bankName: e.target.value }
-              }))}
-              className="bg-slate-600 text-white rounded px-3 py-2"
-            />
-            <input
-              type="text"
-              placeholder="Account Name"
-              value={paymentDetails.bankDetails.accountName}
-              onChange={(e) => setPaymentDetails(prev => ({
-                ...prev,
-                bankDetails: { ...prev.bankDetails, accountName: e.target.value }
-              }))}
-              className="bg-slate-600 text-white rounded px-3 py-2"
-            />
-            <input
-              type="text"
-              placeholder="Account Number"
-              value={paymentDetails.bankDetails.accountNumber}
-              onChange={(e) => setPaymentDetails(prev => ({
-                ...prev,
-                bankDetails: { ...prev.bankDetails, accountNumber: e.target.value }
-              }))}
-              className="bg-slate-600 text-white rounded px-3 py-2"
-            />
-            <input
-              type="text"
-              placeholder="SWIFT Code"
-              value={paymentDetails.bankDetails.swiftCode}
-              onChange={(e) => setPaymentDetails(prev => ({
-                ...prev,
-                bankDetails: { ...prev.bankDetails, swiftCode: e.target.value }
-              }))}
-              className="bg-slate-600 text-white rounded px-3 py-2"
-            />
-            <input
-              type="text"
-              placeholder="IBAN"
-              value={paymentDetails.bankDetails.iban}
-              onChange={(e) => setPaymentDetails(prev => ({
-                ...prev,
-                bankDetails: { ...prev.bankDetails, iban: e.target.value }
-              }))}
-              className="bg-slate-600 text-white rounded px-3 py-2"
+              placeholder="Enter client name"
+              value={clientDetails.name}
+              onChange={(e) => setClientDetails(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40"
             />
           </div>
-        )}
-
-        {paymentDetails.method === 'paypal' && (
-          <input
-            type="email"
-            placeholder="PayPal Email"
-            value={paymentDetails.paypalEmail}
-            onChange={(e) => setPaymentDetails(prev => ({ ...prev, paypalEmail: e.target.value }))}
-            className="w-full bg-slate-600 text-white rounded px-3 py-2"
-          />
-        )}
-
-        {paymentDetails.method === 'payoneer' && (
-          <input
-            type="email"
-            placeholder="Payoneer Email"
-            value={paymentDetails.payoneerEmail}
-            onChange={(e) => setPaymentDetails(prev => ({ ...prev, payoneerEmail: e.target.value }))}
-            className="w-full bg-slate-600 text-white rounded px-3 py-2"
-          />
-        )}
-
-        {paymentDetails.method === 'other' && (
-          <textarea
-            placeholder="Payment Instructions"
-            value={paymentDetails.otherInstructions}
-            onChange={(e) => setPaymentDetails(prev => ({ ...prev, otherInstructions: e.target.value }))}
-            className="w-full bg-slate-600 text-white rounded px-3 py-2"
-            rows={4}
-          />
-        )}
+          <div>
+            <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              placeholder="Enter client email"
+              value={clientDetails.email}
+              onChange={(e) => setClientDetails(prev => ({ ...prev, email: e.target.value }))}
+              className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+              Company
+            </label>
+            <input
+              type="text"
+              placeholder="Enter company name"
+              value={clientDetails.company}
+              onChange={(e) => setClientDetails(prev => ({ ...prev, company: e.target.value }))}
+              className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+              Address
+            </label>
+            <input
+              type="text"
+              placeholder="Enter address"
+              value={clientDetails.address}
+              onChange={(e) => setClientDetails(prev => ({ ...prev, address: e.target.value }))}
+              className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40"
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Time Entries Section */}
-      <div className="space-y-2">
-        <h3 className="text-white font-medium mb-4">Select Time Entries</h3>
+      {/* Payment Details */}
+      <div className="mb-6">
+        <h3 className="text-lg font-semibold text-primary-foreground mb-4">Payment Details</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+              Payment Method
+            </label>
+            <select
+              value={paymentDetails.method}
+              onChange={(e) => setPaymentDetails(prev => ({ ...prev, method: e.target.value }))}
+              className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
+            >
+              <option value="bank">Bank Transfer</option>
+              <option value="paypal">PayPal</option>
+              <option value="payoneer">Payoneer</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
 
-        {timeEntries.length > 0 ? (
-          timeEntries.map(entry => renderTimeEntry(entry))
-        ) : (
-          <div className="text-center py-8 bg-slate-700/30 rounded-lg">
-            <div className="text-slate-400 mb-2">No time entries found</div>
-            <div className="text-sm text-slate-500">
-              Start tracking time on your tasks to generate invoices
+          {paymentDetails.method === 'bank' && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+                  Bank Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter bank name"
+                  value={paymentDetails.bankDetails.bankName}
+                  onChange={(e) => setPaymentDetails(prev => ({
+                    ...prev,
+                    bankDetails: { ...prev.bankDetails, bankName: e.target.value }
+                  }))}
+                  className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+                  Account Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter account name"
+                  value={paymentDetails.bankDetails.accountName}
+                  onChange={(e) => setPaymentDetails(prev => ({
+                    ...prev,
+                    bankDetails: { ...prev.bankDetails, accountName: e.target.value }
+                  }))}
+                  className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+                  Account Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter account number"
+                  value={paymentDetails.bankDetails.accountNumber}
+                  onChange={(e) => setPaymentDetails(prev => ({
+                    ...prev,
+                    bankDetails: { ...prev.bankDetails, accountNumber: e.target.value }
+                  }))}
+                  className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+                  SWIFT Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter SWIFT code"
+                  value={paymentDetails.bankDetails.swiftCode}
+                  onChange={(e) => setPaymentDetails(prev => ({
+                    ...prev,
+                    bankDetails: { ...prev.bankDetails, swiftCode: e.target.value }
+                  }))}
+                  className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {paymentDetails.method === 'paypal' && (
+            <div>
+              <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+                PayPal Email
+              </label>
+              <input
+                type="email"
+                placeholder="Enter PayPal email"
+                value={paymentDetails.paypalEmail}
+                onChange={(e) => setPaymentDetails(prev => ({ ...prev, paypalEmail: e.target.value }))}
+                className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+            </div>
+          )}
+
+          {paymentDetails.method === 'payoneer' && (
+            <div>
+              <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+                Payoneer Email
+              </label>
+              <input
+                type="email"
+                placeholder="Enter Payoneer email"
+                value={paymentDetails.payoneerEmail}
+                onChange={(e) => setPaymentDetails(prev => ({ ...prev, payoneerEmail: e.target.value }))}
+                className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+            </div>
+          )}
+
+          {paymentDetails.method === 'other' && (
+            <div>
+              <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+                Payment Instructions
+              </label>
+              <textarea
+                placeholder="Enter payment instructions"
+                value={paymentDetails.otherInstructions}
+                onChange={(e) => setPaymentDetails(prev => ({ ...prev, otherInstructions: e.target.value }))}
+                className="w-full px-3 py-2 bg-card/30 text-primary-foreground rounded-lg border border-border/40 placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary/40"
+                rows={4}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* Time Entries */}
+      <div>
+        <h3 className="text-lg font-semibold text-primary-foreground mb-4">Time Entries</h3>
+        <div className="space-y-3">
+          {timeEntries.length > 0 ? (
+            timeEntries.map(entry => (
+              <label
+                key={entry.id || entry.timestamp}
+                className="flex items-center gap-3 p-3 bg-card/30 hover:bg-accent/20 rounded-lg border border-border/40 transition-colors cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedEntries.has(entry.timestamp)}
+                  onChange={() => {
+                    const newSelected = new Set(selectedEntries);
+                    if (newSelected.has(entry.timestamp)) {
+                      newSelected.delete(entry.timestamp);
+                    } else {
+                      newSelected.add(entry.timestamp);
+                    }
+                    setSelectedEntries(newSelected);
+                  }}
+                  className="rounded border-border/40 text-primary focus:ring-1 focus:ring-primary/40"
+                />
+                <div className="flex-1">
+                  <div className="font-medium text-primary-foreground">
+                    {entry.description || 'Untitled Entry'}
+                  </div>
+                  <div className="text-sm text-muted-foreground/80">
+                    {new Date(entry.timestamp).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-medium text-primary-foreground">
+                    ${(entry.duration / 3600 * (entry.hourlyRate || 0)).toFixed(2)}
+                  </div>
+                  <div className="text-sm text-muted-foreground/80">
+                    {(entry.duration / 3600).toFixed(2)} hrs @ ${entry.hourlyRate || 0}/hr
+                  </div>
+                </div>
+              </label>
+            ))
+          ) : (
+            <div className="text-center py-8 bg-card/30 rounded-lg border border-border/40">
+              <div className="text-muted-foreground/90">No time entries found</div>
+              <div className="text-sm text-muted-foreground/70">
+                Start tracking time on your tasks to generate invoices
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Total Amount */}
       {timeEntries.length > 0 && selectedEntries.size > 0 && (
-        <div className="mt-4 pt-4 border-t border-slate-700">
-          <div className="flex justify-between text-lg font-semibold text-white">
-            <span>Total Selected:</span>
-            <span>${calculateTotal().toFixed(2)}</span>
+        <div className="mt-6 pt-4 border-t border-border/40">
+          <div className="flex justify-between items-center">
+            <span className="text-lg font-semibold text-primary-foreground">Total Amount:</span>
+            <span className="text-2xl font-bold text-primary-foreground">${calculateTotal().toFixed(2)}</span>
           </div>
         </div>
       )}
-
-      <button
-        onClick={generateInvoice}
-        disabled={selectedEntries.size === 0}
-        className="w-full px-4 py-3 bg-violet-500 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center justify-center mt-6"
-      >
-        <FiDownload className="w-5 h-5 mr-2" />
-        Generate Invoice
-      </button>
     </div>
   );
 };

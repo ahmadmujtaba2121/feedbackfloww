@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { FiDollarSign, FiDownload, FiPlus, FiClock, FiCheck, FiAlertCircle, FiUser, FiCalendar, FiFileText } from 'react-icons/fi';
 import { doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
@@ -51,10 +51,29 @@ const INVOICE_TEMPLATES = {
     }
 };
 
+const formatDuration = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${minutes}m`;
+};
+
+const formatCurrency = (amount, currency = 'USD') => {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency
+    }).format(amount);
+};
+
 const InvoiceSection = ({ projectId }) => {
     const { currentUser } = useAuth();
     const [timeEntries, setTimeEntries] = useState([]);
     const [selectedEntries, setSelectedEntries] = useState(new Set());
+    const [showNewInvoice, setShowNewInvoice] = useState(false);
+    const [selectedTasks, setSelectedTasks] = useState([]);
+    const [invoiceDetails, setInvoiceDetails] = useState({
+        rate: 0,
+        currency: 'USD'
+    });
     const [clientDetails, setClientDetails] = useState({
         name: '',
         email: '',
@@ -271,14 +290,57 @@ const InvoiceSection = ({ projectId }) => {
         }
     };
 
+    // Calculate time by user and task time details
+    const timeByUser = useMemo(() => {
+        const userTime = {};
+        timeEntries.forEach(entry => {
+            if (!userTime[entry.userId]) {
+                userTime[entry.userId] = {
+                    totalTime: 0,
+                    tasks: new Set()
+                };
+            }
+            userTime[entry.userId].totalTime += entry.duration;
+            userTime[entry.userId].tasks.add(entry.taskId);
+        });
+        return userTime;
+    }, [timeEntries]);
+
+    const taskTimeDetails = useMemo(() => {
+        const taskDetails = {};
+        timeEntries.forEach(entry => {
+            if (!taskDetails[entry.taskId]) {
+                taskDetails[entry.taskId] = {
+                    id: entry.taskId,
+                    title: entry.taskDescription || 'Untitled Task',
+                    assignedTo: entry.userId,
+                    totalTime: 0,
+                    timeLogs: [],
+                    billableAmount: 0
+                };
+            }
+            taskDetails[entry.taskId].totalTime += entry.duration;
+            taskDetails[entry.taskId].timeLogs.push({
+                startTime: entry.startTime,
+                duration: entry.duration
+            });
+            taskDetails[entry.taskId].billableAmount =
+                (taskDetails[entry.taskId].totalTime / 3600) * invoiceDetails.rate;
+        });
+        return Object.values(taskDetails);
+    }, [timeEntries, invoiceDetails.rate]);
+
     return (
-        <div className="space-y-6 p-6">
-            <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-foreground">Invoicing</h2>
+        <div className="bg-background/95 p-6 rounded-lg border border-border/40">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h2 className="text-2xl font-semibold text-foreground">Invoicing</h2>
+                    <p className="text-sm text-muted-foreground">Track and manage billable hours</p>
+                </div>
                 <button
                     onClick={handleGenerateInvoice}
                     disabled={selectedEntries.size === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:pointer-events-none"
                 >
                     <FiDownload className="w-4 h-4" />
                     Generate Invoice
@@ -286,73 +348,73 @@ const InvoiceSection = ({ projectId }) => {
             </div>
 
             {/* Template Selection */}
-            <div className="bg-card rounded-lg border border-border p-4">
-                <h3 className="text-lg font-medium text-foreground mb-4">Invoice Template</h3>
+            <div className="bg-card rounded-lg border border-border p-4 mb-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">Invoice Template</h3>
                 <div className="grid grid-cols-3 gap-4">
                     {Object.entries(INVOICE_TEMPLATES).map(([key, template]) => (
                         <button
                             key={key}
                             onClick={() => setSelectedTemplate(key)}
                             className={`p-4 rounded-lg border-2 transition-colors ${selectedTemplate === key
-                                ? 'border-primary bg-primary/10'
-                                : 'border-border hover:border-primary/50'
+                                ? 'border-primary bg-primary/5 text-foreground font-medium'
+                                : 'border-border hover:border-border/80 text-muted-foreground hover:text-foreground bg-background'
                                 }`}
                         >
-                            <span className="text-foreground">{template.name}</span>
+                            <span className="font-medium">{template.name}</span>
                         </button>
                     ))}
                 </div>
             </div>
 
             {/* Client Details */}
-            <div className="bg-card rounded-lg border border-border p-4">
-                <h3 className="text-lg font-medium text-foreground mb-4">Client Details</h3>
+            <div className="bg-card rounded-lg border border-border p-4 mb-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">Client Details</h3>
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">
+                        <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
                             Client Name
                         </label>
                         <input
                             type="text"
                             value={clientDetails.name}
                             onChange={(e) => setClientDetails(prev => ({ ...prev, name: e.target.value }))}
-                            className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
+                            className="w-full px-3 py-2 bg-background/50 text-primary-foreground rounded-lg border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50"
                             placeholder="Enter client name"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">
+                        <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
                             Email
                         </label>
                         <input
                             type="email"
                             value={clientDetails.email}
                             onChange={(e) => setClientDetails(prev => ({ ...prev, email: e.target.value }))}
-                            className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
+                            className="w-full px-3 py-2 bg-background/50 text-primary-foreground rounded-lg border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50"
                             placeholder="Enter client email"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">
+                        <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
                             Company
                         </label>
                         <input
                             type="text"
                             value={clientDetails.company}
                             onChange={(e) => setClientDetails(prev => ({ ...prev, company: e.target.value }))}
-                            className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
+                            className="w-full px-3 py-2 bg-background/50 text-primary-foreground rounded-lg border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50"
                             placeholder="Enter company name"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">
+                        <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
                             Address
                         </label>
                         <input
                             type="text"
                             value={clientDetails.address}
                             onChange={(e) => setClientDetails(prev => ({ ...prev, address: e.target.value }))}
-                            className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
+                            className="w-full px-3 py-2 bg-background/50 text-primary-foreground rounded-lg border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50"
                             placeholder="Enter address"
                         />
                     </div>
@@ -360,17 +422,17 @@ const InvoiceSection = ({ projectId }) => {
             </div>
 
             {/* Payment Details */}
-            <div className="bg-card rounded-lg border border-border p-4">
-                <h3 className="text-lg font-medium text-foreground mb-4">Payment Details</h3>
+            <div className="bg-card rounded-lg border border-border p-4 mb-6">
+                <h3 className="text-lg font-semibold text-foreground mb-4">Payment Details</h3>
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-muted-foreground mb-1">
+                        <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
                             Payment Method
                         </label>
                         <select
                             value={paymentDetails.method}
                             onChange={(e) => setPaymentDetails(prev => ({ ...prev, method: e.target.value }))}
-                            className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
+                            className="w-full px-3 py-2 bg-background/50 text-primary-foreground rounded-lg border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40"
                         >
                             <option value="bank">Bank Transfer</option>
                             <option value="paypal">PayPal</option>
@@ -381,94 +443,43 @@ const InvoiceSection = ({ projectId }) => {
 
                     {paymentDetails.method === 'bank' && (
                         <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                                    Bank Name
-                                </label>
-                                <input
-                                    type="text"
-                                    value={paymentDetails.bankDetails.bankName}
-                                    onChange={(e) => setPaymentDetails(prev => ({
-                                        ...prev,
-                                        bankDetails: { ...prev.bankDetails, bankName: e.target.value }
-                                    }))}
-                                    className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
-                                    placeholder="Enter bank name"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                                    Account Name
-                                </label>
-                                <input
-                                    type="text"
-                                    value={paymentDetails.bankDetails.accountName}
-                                    onChange={(e) => setPaymentDetails(prev => ({
-                                        ...prev,
-                                        bankDetails: { ...prev.bankDetails, accountName: e.target.value }
-                                    }))}
-                                    className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
-                                    placeholder="Enter account name"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                                    Account Number
-                                </label>
-                                <input
-                                    type="text"
-                                    value={paymentDetails.bankDetails.accountNumber}
-                                    onChange={(e) => setPaymentDetails(prev => ({
-                                        ...prev,
-                                        bankDetails: { ...prev.bankDetails, accountNumber: e.target.value }
-                                    }))}
-                                    className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
-                                    placeholder="Enter account number"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                                    SWIFT Code
-                                </label>
-                                <input
-                                    type="text"
-                                    value={paymentDetails.bankDetails.swiftCode}
-                                    onChange={(e) => setPaymentDetails(prev => ({
-                                        ...prev,
-                                        bankDetails: { ...prev.bankDetails, swiftCode: e.target.value }
-                                    }))}
-                                    className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
-                                    placeholder="Enter SWIFT code"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <label className="block text-sm font-medium text-muted-foreground mb-1">
-                                    IBAN
-                                </label>
-                                <input
-                                    type="text"
-                                    value={paymentDetails.bankDetails.iban}
-                                    onChange={(e) => setPaymentDetails(prev => ({
-                                        ...prev,
-                                        bankDetails: { ...prev.bankDetails, iban: e.target.value }
-                                    }))}
-                                    className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
-                                    placeholder="Enter IBAN"
-                                />
-                            </div>
+                            {/* Bank Details Fields */}
+                            {[
+                                { label: 'Bank Name', key: 'bankName' },
+                                { label: 'Account Name', key: 'accountName' },
+                                { label: 'Account Number', key: 'accountNumber' },
+                                { label: 'SWIFT Code', key: 'swiftCode' },
+                                { label: 'IBAN', key: 'iban', span: 2 }
+                            ].map(field => (
+                                <div key={field.key} className={field.span === 2 ? 'col-span-2' : ''}>
+                                    <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
+                                        {field.label}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={paymentDetails.bankDetails[field.key]}
+                                        onChange={(e) => setPaymentDetails(prev => ({
+                                            ...prev,
+                                            bankDetails: { ...prev.bankDetails, [field.key]: e.target.value }
+                                        }))}
+                                        className="w-full px-3 py-2 bg-background/50 text-primary-foreground rounded-lg border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50"
+                                        placeholder={`Enter ${field.label.toLowerCase()}`}
+                                    />
+                                </div>
+                            ))}
                         </div>
                     )}
 
                     {paymentDetails.method === 'paypal' && (
                         <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">
+                            <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
                                 PayPal Email
                             </label>
                             <input
                                 type="email"
                                 value={paymentDetails.paypalEmail}
                                 onChange={(e) => setPaymentDetails(prev => ({ ...prev, paypalEmail: e.target.value }))}
-                                className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
+                                className="w-full px-3 py-2 bg-background/50 text-primary-foreground rounded-lg border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50"
                                 placeholder="Enter PayPal email"
                             />
                         </div>
@@ -476,14 +487,14 @@ const InvoiceSection = ({ projectId }) => {
 
                     {paymentDetails.method === 'payoneer' && (
                         <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">
+                            <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
                                 Payoneer Email
                             </label>
                             <input
                                 type="email"
                                 value={paymentDetails.payoneerEmail}
                                 onChange={(e) => setPaymentDetails(prev => ({ ...prev, payoneerEmail: e.target.value }))}
-                                className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
+                                className="w-full px-3 py-2 bg-background/50 text-primary-foreground rounded-lg border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50"
                                 placeholder="Enter Payoneer email"
                             />
                         </div>
@@ -491,13 +502,13 @@ const InvoiceSection = ({ projectId }) => {
 
                     {paymentDetails.method === 'other' && (
                         <div>
-                            <label className="block text-sm font-medium text-muted-foreground mb-1">
+                            <label className="block text-sm font-medium text-primary-foreground/90 mb-1">
                                 Payment Instructions
                             </label>
                             <textarea
                                 value={paymentDetails.otherInstructions}
                                 onChange={(e) => setPaymentDetails(prev => ({ ...prev, otherInstructions: e.target.value }))}
-                                className="w-full px-3 py-2 bg-input text-foreground rounded-md border border-input"
+                                className="w-full px-3 py-2 bg-background/50 text-primary-foreground rounded-lg border border-border/40 focus:outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50"
                                 placeholder="Enter payment instructions"
                                 rows={4}
                             />
@@ -508,13 +519,13 @@ const InvoiceSection = ({ projectId }) => {
 
             {/* Time Entries */}
             <div className="bg-card rounded-lg border border-border p-4">
-                <h3 className="text-lg font-medium text-foreground mb-4">Time Entries</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-4">Time Entries</h3>
                 <div className="space-y-4">
                     {timeEntries.length > 0 ? (
                         timeEntries.map(entry => (
                             <div
                                 key={entry.id}
-                                className="flex items-center justify-between p-4 bg-muted rounded-lg"
+                                className="flex items-center justify-between p-4 bg-background/50 hover:bg-accent/20 rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-4">
                                     <input
@@ -529,24 +540,24 @@ const InvoiceSection = ({ projectId }) => {
                                             }
                                             setSelectedEntries(newSelected);
                                         }}
-                                        className="w-4 h-4 rounded border-input"
+                                        className="rounded border-border/40 text-primary focus:ring-1 focus:ring-primary/40"
                                     />
                                     <div>
-                                        <div className="font-medium text-foreground">
+                                        <div className="font-medium text-primary-foreground">
                                             {entry.taskDescription}
                                         </div>
-                                        <div className="text-sm text-muted-foreground">
+                                        <div className="text-sm text-muted-foreground/80">
                                             {new Date(entry.startTime).toLocaleDateString()}
                                         </div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className="text-right">
-                                        <div className="font-medium text-foreground">
+                                        <div className="font-medium text-primary-foreground">
                                             {(entry.duration / 3600).toFixed(2)} hours
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <label className="text-sm text-muted-foreground">Rate:</label>
+                                            <label className="text-sm text-muted-foreground/80">Rate:</label>
                                             <input
                                                 type="number"
                                                 value={hourlyRates[entry.taskId] || ''}
@@ -554,7 +565,7 @@ const InvoiceSection = ({ projectId }) => {
                                                     ...prev,
                                                     [entry.taskId]: Number(e.target.value)
                                                 }))}
-                                                className="w-20 px-2 py-1 bg-input text-foreground rounded border border-input text-right"
+                                                className="w-20 px-2 py-1 bg-background/50 text-primary-foreground rounded border border-border/40 text-right focus:outline-none focus:ring-1 focus:ring-primary/40"
                                                 placeholder="$/hr"
                                                 min="0"
                                                 step="0.01"
@@ -565,17 +576,17 @@ const InvoiceSection = ({ projectId }) => {
                             </div>
                         ))
                     ) : (
-                        <div className="text-center py-8 text-muted-foreground">
+                        <div className="text-center py-8 text-muted-foreground/80">
                             No time entries available
                         </div>
                     )}
                 </div>
 
                 {selectedEntries.size > 0 && (
-                    <div className="mt-4 pt-4 border-t border-border">
+                    <div className="mt-4 pt-4 border-t border-border/40">
                         <div className="flex justify-between items-center">
-                            <span className="text-lg font-medium text-foreground">Total Amount</span>
-                            <span className="text-2xl font-bold text-foreground">
+                            <span className="text-lg font-medium text-primary-foreground">Total Amount</span>
+                            <span className="text-2xl font-bold text-primary-foreground">
                                 ${calculateTotal().toFixed(2)}
                             </span>
                         </div>
