@@ -139,59 +139,59 @@ export const TaskProvider = ({ children, projectId }) => {
   };
 
   // Update task function
-  const updateTask = useCallback(async (taskId, updatedData) => {
-    if (!projectRef || !taskId) {
-      throw new Error('Missing projectRef or taskId in updateTask');
+  const updateTask = async (projectId, taskId, updatedTask) => {
+    if (!projectId || !taskId) {
+      throw new Error('Project ID and Task ID are required');
     }
 
     try {
-      const projectSnap = await getDoc(projectRef);
-      if (!projectSnap.exists()) {
+      const projectRef = doc(db, 'projects', projectId);
+      const projectDoc = await getDoc(projectRef);
+
+      if (!projectDoc.exists()) {
         throw new Error('Project not found');
       }
 
-      const projectData = projectSnap.data();
-      const timestamp = new Date().toISOString();
-
-      // Find and update the task
-      const tasks = Array.isArray(projectData.tasks) ? projectData.tasks : [];
-      const taskIndex = tasks.findIndex(task => task.id === taskId);
+      const projectData = projectDoc.data();
+      const taskIndex = projectData.tasks.findIndex(t => t.id === taskId);
 
       if (taskIndex === -1) {
-        throw new Error('Task not found');
+        throw new Error('Task not found in project');
       }
 
-      // Create updated task
-      const updatedTask = {
-        ...tasks[taskIndex],
-        ...updatedData,
-        lastModified: timestamp,
-        subtasks: Array.isArray(updatedData.subtasks) ? updatedData.subtasks : (tasks[taskIndex].subtasks || [])
+      // Update the task in the tasks array
+      const updatedTasks = [...projectData.tasks];
+      updatedTasks[taskIndex] = {
+        ...updatedTasks[taskIndex],
+        ...updatedTask,
+        updatedAt: new Date().toISOString()
       };
 
-      // Update tasks array
-      const updatedTasks = [...tasks];
-      updatedTasks[taskIndex] = updatedTask;
-
-      // Update in Firestore
+      // Update the project document
       await updateDoc(projectRef, {
-        tasks: updatedTasks,
-        lastModified: serverTimestamp()
+        tasks: updatedTasks
       });
 
-      // Optimistic update
-      setTasks(prevTasks =>
-        prevTasks.map(task =>
-          task.id === taskId ? updatedTask : task
-        )
-      );
+      // Update local state
+      setTasks(prevTasks => {
+        const newTasks = [...prevTasks];
+        const localTaskIndex = newTasks.findIndex(t => t.id === taskId);
+        if (localTaskIndex !== -1) {
+          newTasks[localTaskIndex] = {
+            ...newTasks[localTaskIndex],
+            ...updatedTask,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return newTasks;
+      });
 
-      return true;
+      return updatedTask;
     } catch (error) {
       console.error('Error updating task:', error);
       throw error;
     }
-  }, [projectRef]);
+  };
 
   // Add task function
   const addTask = useCallback(async (taskData) => {

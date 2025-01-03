@@ -1,134 +1,158 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, addMonths, subMonths } from 'date-fns';
+import { DragDropContext, Droppable } from 'react-beautiful-dnd';
+import { FiChevronLeft, FiChevronRight, FiPlus, FiCalendar, FiList, FiFilter, FiSearch, FiX, FiCheck } from 'react-icons/fi';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, addMonths, subMonths, isToday, startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
 import { useTask } from '../../contexts/TaskContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { toast } from 'react-hot-toast';
+import TaskCard from './TaskCard';
 
-const TaskCard = ({ task, onDragStart, onDragEnd, isOwner }) => {
-  const priorityColors = {
-    low: 'border-blue-500/50',
-    medium: 'border-yellow-500/50',
-    high: 'border-red-500/50'
-  };
-
-  const handleDragStart = (e) => {
-    if (!isOwner) {
-      e.preventDefault();
-      return;
-    }
-    e.dataTransfer.setData('taskId', task.id);
-    if (onDragStart) onDragStart(task);
-  };
-
-  return (
-    <div
-      draggable={isOwner}
-      onDragStart={handleDragStart}
-      onDragEnd={onDragEnd}
-      className={`
-        p-2 rounded-lg bg-slate-700/50 border-l-4 
-        ${priorityColors[task.priority]} 
-        ${isOwner ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
-        select-none
-      `}
-    >
-      <h3 className="text-sm font-medium text-white truncate">{task.title}</h3>
-      <div className="text-xs text-slate-400 truncate">
-        {task.status}
-      </div>
-    </div>
+const CalendarDay = ({ dateKey, tasks = [], isCurrentMonth, isOwner, isTodays, isSelected, onSelectDate }) => {
+  const { currentTheme } = useTheme();
+  const date = new Date(dateKey);
+  const hasOverdueTasks = tasks.some(task =>
+    task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'COMPLETED'
   );
-};
-
-const CalendarDay = ({ dateKey, tasks = [], isCurrentMonth, isOwner, onDrop }) => {
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.currentTarget.classList.add('bg-slate-700/50', 'border-violet-500');
-  };
-
-  const handleDragLeave = (e) => {
-    e.currentTarget.classList.remove('bg-slate-700/50', 'border-violet-500');
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.currentTarget.classList.remove('bg-slate-700/50', 'border-violet-500');
-    const taskId = e.dataTransfer.getData('taskId');
-    if (taskId && onDrop) {
-      onDrop(taskId, dateKey);
-    }
-  };
+  const hasTasksDueToday = tasks.some(task =>
+    task.dueDate && format(new Date(task.dueDate), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+  );
 
   return (
-    <div
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      className={`min-h-[120px] p-2 rounded-lg border transition-colors ${isCurrentMonth
-        ? 'bg-slate-800/50 border-slate-700'
-        : 'bg-slate-800/20 border-slate-700/50'
-        }`}
-    >
-      <div className="text-right mb-2">
-        <span className={`text-sm ${isCurrentMonth ? 'text-slate-300' : 'text-slate-500'}`}>
-          {format(new Date(dateKey), 'd')}
-        </span>
-      </div>
-      <div className="space-y-2">
-        {tasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            isOwner={isOwner}
-          />
-        ))}
-      </div>
-    </div>
+    <Droppable droppableId={String(dateKey)}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.droppableProps}
+          onClick={() => onSelectDate(date)}
+          className={`
+            min-h-[120px] p-2 rounded-lg border transition-all duration-200 cursor-pointer
+            ${isCurrentMonth ? 'bg-background/50 border-border' : 'bg-background/20 border-border/50'}
+            ${isTodays ? 'ring-2 ring-primary/50' : ''}
+            ${isSelected ? 'ring-2 ring-primary' : ''}
+            ${snapshot.isDraggingOver ? 'bg-accent/50 border-primary ring-2 ring-primary/20' : ''}
+            ${hasOverdueTasks ? 'border-destructive/30' : ''}
+            hover:border-primary/50 hover:shadow-sm
+          `}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className={`
+              text-sm px-2 py-0.5 rounded-full font-medium
+              ${isTodays ? 'bg-primary text-primary-foreground' : ''}
+              ${isCurrentMonth ? 'text-foreground/90' : 'text-foreground/50'}
+              ${hasTasksDueToday ? 'font-semibold' : ''}
+            `}>
+              {format(date, 'd')}
+            </span>
+            {hasTasksDueToday && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                {tasks.length} task{tasks.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            {tasks.map((task, index) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                index={index}
+              />
+            ))}
+            {provided.placeholder}
+          </div>
+        </div>
+      )}
+    </Droppable>
   );
 };
 
 const CalendarView = ({ projectId }) => {
   const { tasks, addTask, updateTask, project } = useTask();
   const { currentUser } = useAuth();
+  const { currentTheme } = useTheme();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(null);
   const [showCreateTask, setShowCreateTask] = useState(false);
+  const [viewMode, setViewMode] = useState('month');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [showOverdueTasks, setShowOverdueTasks] = useState(true);
+  const [showCompletedTasks, setShowCompletedTasks] = useState(true);
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
     category: 'design',
     priority: 'medium',
     status: 'TODO',
-    dueDate: new Date().toISOString()
+    dueDate: new Date().toISOString(),
+    assignedTo: ''
   });
 
-  // Get calendar days for current month
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(currentDate);
-  const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  // Get calendar days based on view mode
+  const calendarDays = useMemo(() => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const calStart = startOfWeek(monthStart);
+    const calEnd = endOfWeek(monthEnd);
 
-  // Group tasks by due date
-  const tasksByDate = tasks.reduce((acc, task) => {
-    if (!task.dueDate) return acc;
-    const dateKey = format(new Date(task.dueDate), 'yyyy-MM-dd');
-    if (!acc[dateKey]) acc[dateKey] = [];
-    acc[dateKey].push(task);
-    return acc;
-  }, {});
+    return eachDayOfInterval({
+      start: viewMode === 'month' ? calStart : startOfWeek(currentDate),
+      end: viewMode === 'month' ? calEnd : endOfWeek(currentDate)
+    });
+  }, [currentDate, viewMode]);
 
-  const handleDrop = async (taskId, newDateKey) => {
+  // Filter and group tasks
+  const filteredTasksByDate = useMemo(() => {
+    return tasks
+      .filter(task => {
+        if (!showCompletedTasks && task.status === 'COMPLETED') return false;
+        if (!showOverdueTasks && task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'COMPLETED') return false;
+
+        const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          task.description?.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+        const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
+
+        return matchesSearch && matchesStatus && matchesPriority;
+      })
+      .reduce((acc, task) => {
+        if (!task.dueDate) return acc;
+        const dateKey = format(new Date(task.dueDate), 'yyyy-MM-dd');
+        if (!acc[dateKey]) acc[dateKey] = [];
+        acc[dateKey].push(task);
+        return acc;
+      }, {});
+  }, [tasks, searchQuery, statusFilter, priorityFilter, showOverdueTasks, showCompletedTasks]);
+
+  const handleDragEnd = async (result) => {
+    const { destination, source, draggableId } = result;
+    if (!destination) return;
+    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+
     try {
-      const task = tasks.find(t => t.id === taskId);
+      const task = tasks.find(t => String(t.id) === draggableId);
       if (!task) return;
 
-      const newDueDate = new Date(newDateKey).toISOString();
-      await updateTask(task.id, {
-        ...task,
-        dueDate: newDueDate
-      });
+      const newDueDate = new Date(destination.droppableId);
+      const originalDate = new Date(task.dueDate);
+      newDueDate.setHours(originalDate.getHours());
+      newDueDate.setMinutes(originalDate.getMinutes());
 
-      toast.success('Task moved successfully');
+      const updatedTask = {
+        ...task,
+        dueDate: newDueDate.toISOString()
+      };
+
+      toast.promise(
+        updateTask(projectId, task.id, updatedTask),
+        {
+          loading: 'Moving task...',
+          success: 'Task moved successfully',
+          error: 'Failed to move task'
+        }
+      );
     } catch (error) {
       console.error('Error moving task:', error);
       toast.error('Failed to move task');
@@ -145,7 +169,8 @@ const CalendarView = ({ projectId }) => {
     try {
       await addTask({
         ...newTask,
-        createdBy: currentUser?.email
+        createdBy: currentUser?.email,
+        dueDate: selectedDate ? new Date(selectedDate).toISOString() : newTask.dueDate
       });
 
       setNewTask({
@@ -154,7 +179,8 @@ const CalendarView = ({ projectId }) => {
         category: 'design',
         priority: 'medium',
         status: 'TODO',
-        dueDate: new Date().toISOString()
+        dueDate: new Date().toISOString(),
+        assignedTo: ''
       });
       setShowCreateTask(false);
       toast.success('Task created successfully');
@@ -164,37 +190,166 @@ const CalendarView = ({ projectId }) => {
     }
   };
 
+  const handleSelectDate = (date) => {
+    setSelectedDate(format(date, 'yyyy-MM-dd'));
+    if (project?.owner === currentUser?.email) {
+      setShowCreateTask(true);
+      setNewTask(prev => ({
+        ...prev,
+        dueDate: date.toISOString()
+      }));
+    }
+  };
+
+  // Calculate task statistics
+  const taskStats = useMemo(() => {
+    const stats = {
+      total: tasks.length,
+      completed: tasks.filter(t => t.status === 'COMPLETED').length,
+      overdue: tasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'COMPLETED').length,
+      dueToday: tasks.filter(t => t.dueDate && format(new Date(t.dueDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')).length
+    };
+    stats.inProgress = stats.total - stats.completed;
+    return stats;
+  }, [tasks]);
+
   return (
     <div className="h-full flex flex-col">
       {/* Calendar Header */}
-      <div className="p-4 bg-slate-800/50 border-b border-slate-700">
+      <div className="p-4 bg-background border-b border-border">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-              className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-accent rounded-lg transition-colors"
             >
-              <FiChevronLeft className="w-5 h-5 text-white" />
+              <FiChevronLeft className="w-5 h-5 text-foreground" />
             </button>
-            <h2 className="text-xl font-semibold text-white">
+            <h2 className="text-xl font-semibold text-foreground/90">
               {format(currentDate, 'MMMM yyyy')}
             </h2>
             <button
               onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-              className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
+              className="p-2 hover:bg-accent rounded-lg transition-colors"
             >
-              <FiChevronRight className="w-5 h-5 text-white" />
+              <FiChevronRight className="w-5 h-5 text-foreground" />
             </button>
           </div>
-          {project?.owner === currentUser?.email && (
-            <button
-              onClick={() => setShowCreateTask(!showCreateTask)}
-              className="px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors flex items-center space-x-2"
-            >
-              <FiPlus className="w-5 h-5" />
-              <span>Add Task</span>
-            </button>
-          )}
+
+          <div className="flex items-center gap-4">
+            {/* Task Statistics */}
+            <div className="flex items-center gap-3 px-4 py-2 bg-background/50 rounded-lg border border-border">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-foreground/90">{taskStats.total}</span>
+                <span className="text-xs text-foreground/70">Total</span>
+              </div>
+              <div className="w-px h-4 bg-border/50" />
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-success/90">{taskStats.completed}</span>
+                <span className="text-xs text-foreground/70">Done</span>
+              </div>
+              <div className="w-px h-4 bg-border/50" />
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-destructive/90">{taskStats.overdue}</span>
+                <span className="text-xs text-foreground/70">Overdue</span>
+              </div>
+              <div className="w-px h-4 bg-border/50" />
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-warning/90">{taskStats.dueToday}</span>
+                <span className="text-xs text-foreground/70">Today</span>
+              </div>
+            </div>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center bg-muted rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('month')}
+                className={`p-2 rounded-md transition-colors ${viewMode === 'month'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-accent'
+                  }`}
+              >
+                <FiCalendar className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('week')}
+                className={`p-2 rounded-md transition-colors ${viewMode === 'week'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-accent'
+                  }`}
+              >
+                <FiList className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Search and Filters */}
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search tasks..."
+                  className="pl-9 pr-4 py-2 bg-muted border border-input rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                />
+              </div>
+
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 bg-muted border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              >
+                <option value="all">All Status</option>
+                <option value="TODO">To Do</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="COMPLETED">Completed</option>
+              </select>
+
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="px-3 py-2 bg-muted border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              >
+                <option value="all">All Priority</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+
+              {/* Task Display Toggles */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowOverdueTasks(!showOverdueTasks)}
+                  className={`px-3 py-2 rounded-lg border transition-colors ${showOverdueTasks
+                    ? 'bg-destructive/10 border-destructive/20 text-destructive'
+                    : 'bg-muted border-input text-muted-foreground'
+                    }`}
+                >
+                  Overdue
+                </button>
+                <button
+                  onClick={() => setShowCompletedTasks(!showCompletedTasks)}
+                  className={`px-3 py-2 rounded-lg border transition-colors ${showCompletedTasks
+                    ? 'bg-success/10 border-success/20 text-success'
+                    : 'bg-muted border-input text-muted-foreground'
+                    }`}
+                >
+                  Completed
+                </button>
+              </div>
+            </div>
+
+            {project?.owner === currentUser?.email && (
+              <button
+                onClick={() => setShowCreateTask(!showCreateTask)}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center space-x-2"
+              >
+                <FiPlus className="w-5 h-5" />
+                <span>Add Task</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Create Task Form */}
@@ -205,90 +360,105 @@ const CalendarView = ({ projectId }) => {
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               onSubmit={handleCreateTask}
-              className="mt-4 p-4 bg-slate-700 rounded-lg overflow-hidden"
+              className="mt-4 p-4 bg-card rounded-lg overflow-hidden border border-border shadow-lg"
             >
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     Title
                   </label>
                   <input
                     type="text"
                     value={newTask.title}
                     onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-violet-500"
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     placeholder="Task title"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     Description
                   </label>
                   <textarea
                     value={newTask.description}
                     onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:border-violet-500"
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                     rows="3"
                     placeholder="What needs to be done?"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
-                      Category
-                    </label>
-                    <select
-                      value={newTask.category}
-                      onChange={(e) => setNewTask(prev => ({ ...prev, category: e.target.value }))}
-                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                    >
-                      <option value="design">Design</option>
-                      <option value="content">Content</option>
-                      <option value="development">Development</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
-                      Priority
-                    </label>
-                    <select
-                      value={newTask.priority}
-                      onChange={(e) => setNewTask(prev => ({ ...prev, priority: e.target.value }))}
-                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                    >
-                      <option value="high">High</option>
-                      <option value="medium">Medium</option>
-                      <option value="low">Low</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
-                      Due Date
-                    </label>
-                    <input
-                      type="date"
-                      value={format(new Date(newTask.dueDate), 'yyyy-MM-dd')}
-                      onChange={(e) => setNewTask(prev => ({ ...prev, dueDate: new Date(e.target.value).toISOString() }))}
-                      className="w-full px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:outline-none focus:border-violet-500"
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowCreateTask(false)}
-                    className="px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={newTask.category}
+                    onChange={(e) => setNewTask(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-violet-500 text-white rounded-lg hover:bg-violet-600 transition-colors"
-                  >
-                    Create Task
-                  </button>
+                    <option value="design">Design</option>
+                    <option value="content">Content</option>
+                    <option value="development">Development</option>
+                    <option value="other">Other</option>
+                  </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Priority
+                  </label>
+                  <select
+                    value={newTask.priority}
+                    onChange={(e) => setNewTask(prev => ({ ...prev, priority: e.target.value }))}
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Due Date
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={newTask.dueDate.slice(0, 16)}
+                    onChange={(e) => setNewTask(prev => ({ ...prev, dueDate: new Date(e.target.value).toISOString() }))}
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">
+                    Assign To
+                  </label>
+                  <select
+                    value={newTask.assignedTo}
+                    onChange={(e) => setNewTask(prev => ({ ...prev, assignedTo: e.target.value }))}
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  >
+                    <option value="">Unassigned</option>
+                    {project?.members?.map(member => (
+                      <option key={member.email} value={member.email}>
+                        {member.email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-4 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateTask(false)}
+                  className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  Create Task
+                </button>
               </div>
             </motion.form>
           )}
@@ -296,37 +466,43 @@ const CalendarView = ({ projectId }) => {
       </div>
 
       {/* Calendar Grid */}
-      <div className="flex-1 overflow-auto p-4">
-        <div className="grid grid-cols-7 gap-4">
-          {/* Day Headers */}
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="text-center text-slate-400 font-medium py-2">
-              {day}
-            </div>
-          ))}
+      <div className="flex-1 p-4 overflow-auto">
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <div className="grid grid-cols-7 gap-4">
+            {/* Weekday Headers */}
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="text-center text-sm font-semibold text-foreground/80 mb-2">
+                {day}
+              </div>
+            ))}
 
-          {/* Calendar Days */}
-          {calendarDays.map(day => {
-            const dateKey = format(day, 'yyyy-MM-dd');
-            const dayTasks = tasksByDate[dateKey] || [];
-            const isCurrentMonth = isSameMonth(day, currentDate);
-            const isOwner = project?.owner === currentUser?.email;
+            {/* Calendar Days */}
+            {calendarDays.map(day => {
+              const dateKey = format(day, 'yyyy-MM-dd');
+              const dayTasks = filteredTasksByDate[dateKey] || [];
+              const isCurrentMonth = isSameMonth(day, currentDate);
+              const isOwner = project?.owner === currentUser?.email;
+              const isTodays = isToday(day);
+              const isSelected = dateKey === selectedDate;
 
-            return (
-              <CalendarDay
-                key={dateKey}
-                dateKey={dateKey}
-                tasks={dayTasks}
-                isCurrentMonth={isCurrentMonth}
-                isOwner={isOwner}
-                onDrop={handleDrop}
-              />
-            );
-          })}
-        </div>
+              return (
+                <CalendarDay
+                  key={dateKey}
+                  dateKey={dateKey}
+                  tasks={dayTasks}
+                  isCurrentMonth={isCurrentMonth}
+                  isOwner={isOwner}
+                  isTodays={isTodays}
+                  isSelected={isSelected}
+                  onSelectDate={handleSelectDate}
+                />
+              );
+            })}
+          </div>
+        </DragDropContext>
       </div>
     </div>
   );
 };
 
-export default CalendarView; 
+export default CalendarView;
